@@ -1306,9 +1306,15 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
     }
 
     # ---- Helper: Get-BearerToken ----
+    # ResourceUrl must match the audience of the API being called:
+    #   ARM REST calls        -> https://management.azure.com (default)
+    #   Batch Metrics API     -> https://metrics.monitor.azure.com
     function Get-BearerToken {
+        param(
+            [string]$ResourceUrl = 'https://management.azure.com'
+        )
         try {
-            $tokenObj = Get-AzAccessToken -ResourceUrl 'https://management.azure.com' -ErrorAction Stop
+            $tokenObj = Get-AzAccessToken -ResourceUrl $ResourceUrl -ErrorAction Stop
             $token = if ($tokenObj.Token -is [System.Security.SecureString]) {
                 [System.Runtime.InteropServices.Marshal]::PtrToStringAuto(
                     [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($tokenObj.Token))
@@ -1386,8 +1392,8 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
             $byRegion[$region] += $r
         }
 
-        # Get bearer token once for all batches
-        $token = Get-BearerToken
+        # Get bearer token scoped to the Batch Metrics API audience
+        $token = Get-BearerToken -ResourceUrl 'https://metrics.monitor.azure.com'
         if (-not $token) {
             Write-Warning "  [$subName] Batch API: token acquisition failed, falling back to individual calls"
             return $null  # Signal caller to use individual fallback
