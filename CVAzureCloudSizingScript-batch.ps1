@@ -826,7 +826,7 @@ $targetSubs | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor Cyan }
 
 # NOTE: All retry logic, metric fetching, and ARG queries are implemented
 # directly inside the parallel processing block (Section 5) as self-contained
-# Local: functions. This avoids PowerShell parallel scope resolution issues.
+# functions. This avoids PowerShell parallel scope resolution issues.
 
 # ============================================================================
 # SECTION 4: ARG QUERY DEFINITIONS
@@ -1195,7 +1195,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
     Write-Host "[START] $subName ($subId)" -ForegroundColor Cyan
 
     # ---- Local helper: Get-MetricSafe ----
-    function Local:Get-MetricSafe {
+    function Get-MetricSafe {
         param(
             [string]$ResourceId,
             [string]$MetricName,
@@ -1228,7 +1228,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
         return $null
     }
 
-    function Local:Get-MultiMetricSafe {
+    function Get-MultiMetricSafe {
         param(
             [string]$ResourceId,
             [string[]]$MetricNames,
@@ -1305,8 +1305,8 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
         ASRReplicatedItems = [System.Collections.ArrayList]::new()
     }
 
-    # ---- Local helper: Get-BearerToken (inside try for scope visibility) ----
-    function Local:Get-BearerToken {
+    # ---- Helper: Get-BearerToken ----
+    function Get-BearerToken {
         try {
             $tokenObj = Get-AzAccessToken -ResourceUrl 'https://management.azure.com' -ErrorAction Stop
             $token = if ($tokenObj.Token -is [System.Security.SecureString]) {
@@ -1320,7 +1320,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
     }
 
     # ---- Local helper: Invoke-AzRestSafe (REST API calls with retry) ----
-    function Local:Invoke-AzRestSafe {
+    function Invoke-AzRestSafe {
         param(
             [string]$Uri,
             [string]$Method = 'GET',
@@ -1358,7 +1358,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
     # Returns $null on token failure so callers can fall back to individual calls if they choose.
     # Does NOT auto-fallback to individual calls — that was causing tenant-wide 429 throttle storms
     # with large resource counts (1800+ storage accounts = 5000+ individual metric calls).
-    function Local:Invoke-MetricBatch {
+    function Invoke-MetricBatch {
         param(
             [Parameter(Mandatory)]
             [object[]]$Resources,
@@ -1387,7 +1387,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
         }
 
         # Get bearer token once for all batches
-        $token = Local:Get-BearerToken
+        $token = Get-BearerToken
         if (-not $token) {
             Write-Warning "  [$subName] Batch API: token acquisition failed, falling back to individual calls"
             return $null  # Signal caller to use individual fallback
@@ -1460,7 +1460,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
         return $resultMap
     }
 
-    function Local:Invoke-ARGSafe {
+    function Invoke-ARGSafe {
         param(
             [string]$Query,
             [string]$SubId,
@@ -1531,8 +1531,8 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
     if ($selectedRef.VM) {
         Write-Host "  [$subName] Discovering VMs via ARG..." -ForegroundColor DarkCyan
         try {
-            $vmData = Local:Invoke-ARGSafe -Query $argQueries.VM -SubId $subId -ResourceTypeName 'VMs' -MaxAttempts $maxRetries
-            $diskData = Local:Invoke-ARGSafe -Query $argQueries.Disks -SubId $subId -ResourceTypeName 'Disks' -MaxAttempts $maxRetries
+            $vmData = Invoke-ARGSafe -Query $argQueries.VM -SubId $subId -ResourceTypeName 'VMs' -MaxAttempts $maxRetries
+            $diskData = Invoke-ARGSafe -Query $argQueries.Disks -SubId $subId -ResourceTypeName 'Disks' -MaxAttempts $maxRetries
 
             $diskLookup = @{}
             if ($diskData) {
@@ -1616,9 +1616,9 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
     if ($selectedRef.STORAGE -or $selectedRef.FILESHARE) {
         Write-Host "  [$subName] Discovering Storage Accounts via ARG..." -ForegroundColor DarkCyan
         try {
-            $saData = Local:Invoke-ARGSafe -Query $argQueries.StorageAccounts -SubId $subId -ResourceTypeName 'StorageAccounts' -MaxAttempts $maxRetries
+            $saData = Invoke-ARGSafe -Query $argQueries.StorageAccounts -SubId $subId -ResourceTypeName 'StorageAccounts' -MaxAttempts $maxRetries
 
-            $blobSvcData = Local:Invoke-ARGSafe -Query $argQueries.StorageAccountBlobServices -SubId $subId -ResourceTypeName 'BlobServices' -MaxAttempts $maxRetries
+            $blobSvcData = Invoke-ARGSafe -Query $argQueries.StorageAccountBlobServices -SubId $subId -ResourceTypeName 'BlobServices' -MaxAttempts $maxRetries
             $blobSvcLookup = @{}
             if ($blobSvcData) {
                 foreach ($bs in $blobSvcData) {
@@ -1630,7 +1630,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
                 $saMetricMap = $null
                 if ($selectedRef.STORAGE -and -not $skipMetrics) {
                     Write-Host "  [$subName] Fetching storage metrics via Batch API ($($saData.Count) accounts)..." -ForegroundColor DarkCyan
-                    $saMetricMap = Local:Invoke-MetricBatch -Resources $saData `
+                    $saMetricMap = Invoke-MetricBatch -Resources $saData `
                         -MetricNamespace 'microsoft.storage/storageaccounts' `
                         -MetricNames @('UsedCapacity') -AggType 'Maximum'
                 }
@@ -1644,7 +1644,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
                     $blobSubResources = $saData | ForEach-Object {
                         [PSCustomObject]@{ id = "$($_.id)/blobServices/default"; location = $_.location }
                     }
-                    $blobBatch = Local:Invoke-MetricBatch -Resources $blobSubResources `
+                    $blobBatch = Invoke-MetricBatch -Resources $blobSubResources `
                         -MetricNamespace 'microsoft.storage/storageaccounts/blobservices' `
                         -MetricNames @('BlobCapacity','ContainerCount','BlobCount') -AggType 'Maximum'
                     if ($blobBatch) { $blobMetricMap = $blobBatch }
@@ -1656,7 +1656,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
                         $fileSubResources = $fileEligible | ForEach-Object {
                             [PSCustomObject]@{ id = "$($_.id)/fileServices/default"; location = $_.location }
                         }
-                        $fileBatch = Local:Invoke-MetricBatch -Resources $fileSubResources `
+                        $fileBatch = Invoke-MetricBatch -Resources $fileSubResources `
                             -MetricNamespace 'microsoft.storage/storageaccounts/fileservices' `
                             -MetricNames @('FileCapacity') -AggType 'Maximum'
                         if ($fileBatch) { $fileMetricMap = $fileBatch }
@@ -1666,7 +1666,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
                     $tableSubResources = $saData | ForEach-Object {
                         [PSCustomObject]@{ id = "$($_.id)/tableServices/default"; location = $_.location }
                     }
-                    $tableBatch = Local:Invoke-MetricBatch -Resources $tableSubResources `
+                    $tableBatch = Invoke-MetricBatch -Resources $tableSubResources `
                         -MetricNamespace 'microsoft.storage/storageaccounts/tableservices' `
                         -MetricNames @('TableCapacity') -AggType 'Maximum'
                     if ($tableBatch) { $tableMetricMap = $tableBatch }
@@ -1675,7 +1675,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
                     $queueSubResources = $saData | ForEach-Object {
                         [PSCustomObject]@{ id = "$($_.id)/queueServices/default"; location = $_.location }
                     }
-                    $queueBatch = Local:Invoke-MetricBatch -Resources $queueSubResources `
+                    $queueBatch = Invoke-MetricBatch -Resources $queueSubResources `
                         -MetricNamespace 'microsoft.storage/storageaccounts/queueservices' `
                         -MetricNames @('QueueCapacity') -AggType 'Maximum'
                     if ($queueBatch) { $queueMetricMap = $queueBatch }
@@ -1691,7 +1691,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
                             }
                         } elseif (-not $skipMetrics) {
                             # Fallback to individual call if batch failed
-                            try { $uc = Local:Get-MetricSafe -ResourceId $sa.id -MetricName 'UsedCapacity'
+                            try { $uc = Get-MetricSafe -ResourceId $sa.id -MetricName 'UsedCapacity'
                                 if ($uc) { $totalBytes = [double]$uc }
                             } catch { }
                         }
@@ -1708,7 +1708,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
                         } elseif (-not $skipMetrics) {
                             # Fallback: individual blob metrics (original behavior)
                             try {
-                                $blobMetrics = Local:Get-MultiMetricSafe -ResourceId "$($sa.id)/blobServices/default" `
+                                $blobMetrics = Get-MultiMetricSafe -ResourceId "$($sa.id)/blobServices/default" `
                                     -MetricNames @('BlobCapacity','ContainerCount','BlobCount') -AggType 'Maximum'
                                 if ($blobMetrics) {
                                     $blobCapacity   = $blobMetrics['BlobCapacity']
@@ -1787,10 +1787,10 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
                                 # Improvement #10: Get snapshot counts via REST API
                                 $shareSnapshots = @{}
                                 try {
-                                    $token = Local:Get-BearerToken
+                                    $token = Get-BearerToken
                                     if ($token) {
                                         $listSharesUri = "https://management.azure.com$($sa.id)/fileServices/default/shares?api-version=2023-01-01&`$expand=snapshots"
-                                        $shareListResp = Local:Invoke-AzRestSafe -Uri $listSharesUri -Token $token
+                                        $shareListResp = Invoke-AzRestSafe -Uri $listSharesUri -Token $token
                                         if ($shareListResp -and $shareListResp.value) {
                                             foreach ($s in $shareListResp.value) {
                                                 $sName = $s.name
@@ -1868,8 +1868,8 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
     if ($selectedRef.NETAPP) {
         Write-Host "  [$subName] Discovering NetApp volumes via ARG..." -ForegroundColor DarkCyan
         try {
-            $anfVolumes = Local:Invoke-ARGSafe -Query $argQueries.NetAppVolumes -SubId $subId -ResourceTypeName 'NetAppVolumes' -MaxAttempts $maxRetries
-            $anfPools = Local:Invoke-ARGSafe -Query $argQueries.NetAppPools -SubId $subId -ResourceTypeName 'NetAppPools' -MaxAttempts $maxRetries
+            $anfVolumes = Invoke-ARGSafe -Query $argQueries.NetAppVolumes -SubId $subId -ResourceTypeName 'NetAppVolumes' -MaxAttempts $maxRetries
+            $anfPools = Invoke-ARGSafe -Query $argQueries.NetAppPools -SubId $subId -ResourceTypeName 'NetAppPools' -MaxAttempts $maxRetries
 
             $poolLookup = @{}
             if ($anfPools) { foreach ($p in $anfPools) { $poolLookup[$p.id] = $p } }
@@ -1878,7 +1878,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
                 $anfMetricMap = $null
                 if (-not $skipMetrics) {
                     Write-Host "  [$subName] Fetching NetApp metrics via Batch API ($($anfVolumes.Count) volumes)..." -ForegroundColor DarkCyan
-                    $anfMetricMap = Local:Invoke-MetricBatch -Resources $anfVolumes `
+                    $anfMetricMap = Invoke-MetricBatch -Resources $anfVolumes `
                         -MetricNamespace 'microsoft.netapp/netappaccounts/capacitypools/volumes' `
                         -MetricNames @('VolumeLogicalSize') -AggType 'Average'
                 }
@@ -1889,7 +1889,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
                     if ($anfMetricMap -and $anfMetricMap.ContainsKey($key) -and $anfMetricMap[$key]['VolumeLogicalSize']) {
                         $usedBytes = [double]$anfMetricMap[$key]['VolumeLogicalSize']
                     } elseif (-not $skipMetrics) {
-                        $ub = Local:Get-MetricSafe -ResourceId $vol.id -MetricName 'VolumeLogicalSize' -AggType 'Average'
+                        $ub = Get-MetricSafe -ResourceId $vol.id -MetricName 'VolumeLogicalSize' -AggType 'Average'
                         if ($ub) { $usedBytes = [double]$ub }
                     }
 
@@ -1953,11 +1953,11 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
 
         # SQL Managed Instances
         try {
-            $sqlMIs = Local:Invoke-ARGSafe -Query $argQueries.SqlManagedInstances -SubId $subId -ResourceTypeName 'SqlManagedInstances' -MaxAttempts $maxRetries
+            $sqlMIs = Invoke-ARGSafe -Query $argQueries.SqlManagedInstances -SubId $subId -ResourceTypeName 'SqlManagedInstances' -MaxAttempts $maxRetries
             if ($sqlMIs) {
                 $miMetricMap = $null
                 if (-not $skipMetrics) {
-                    $miMetricMap = Local:Invoke-MetricBatch -Resources $sqlMIs `
+                    $miMetricMap = Invoke-MetricBatch -Resources $sqlMIs `
                         -MetricNamespace 'microsoft.sql/managedinstances' `
                         -MetricNames @('storage_space_used_mb','reserved_storage_mb') -AggType 'Maximum'
                 }
@@ -1969,7 +1969,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
                         if ($miMetricMap[$key]['storage_space_used_mb']) { $usedMB = [double]$miMetricMap[$key]['storage_space_used_mb'] }
                         if ($miMetricMap[$key]['reserved_storage_mb']) { $allocMB = [double]$miMetricMap[$key]['reserved_storage_mb'] }
                     } elseif (-not $skipMetrics) {
-                        $fb = Local:Get-MultiMetricSafe -ResourceId $mi.id -MetricNames @('storage_space_used_mb','reserved_storage_mb')
+                        $fb = Get-MultiMetricSafe -ResourceId $mi.id -MetricNames @('storage_space_used_mb','reserved_storage_mb')
                         if ($fb['storage_space_used_mb']) { $usedMB = [double]$fb['storage_space_used_mb'] }
                         if ($fb['reserved_storage_mb']) { $allocMB = [double]$fb['reserved_storage_mb'] }
                     }
@@ -2041,12 +2041,12 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
 
         # SQL Databases
         try {
-            $sqlDBs = Local:Invoke-ARGSafe -Query $argQueries.SqlDatabases -SubId $subId -ResourceTypeName 'SqlDatabases' -MaxAttempts $maxRetries
+            $sqlDBs = Invoke-ARGSafe -Query $argQueries.SqlDatabases -SubId $subId -ResourceTypeName 'SqlDatabases' -MaxAttempts $maxRetries
             if ($sqlDBs) {
                 $dbMetricMap = $null
                 if (-not $skipMetrics) {
                     Write-Host "  [$subName] Fetching SQL DB metrics via Batch API ($($sqlDBs.Count) databases)..." -ForegroundColor DarkCyan
-                    $dbMetricMap = Local:Invoke-MetricBatch -Resources $sqlDBs `
+                    $dbMetricMap = Invoke-MetricBatch -Resources $sqlDBs `
                         -MetricNamespace 'microsoft.sql/servers/databases' `
                         -MetricNames @('allocated_data_storage','storage') -AggType 'Maximum'
                 }
@@ -2058,7 +2058,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
                         if ($dbMetricMap[$key]['allocated_data_storage']) { $allocBytes = [double]$dbMetricMap[$key]['allocated_data_storage'] }
                         if ($dbMetricMap[$key]['storage']) { $usedBytes = [double]$dbMetricMap[$key]['storage'] }
                     } elseif (-not $skipMetrics) {
-                        $fallback = Local:Get-MultiMetricSafe -ResourceId $db.id -MetricNames @('allocated_data_storage','storage')
+                        $fallback = Get-MultiMetricSafe -ResourceId $db.id -MetricNames @('allocated_data_storage','storage')
                         if ($fallback['allocated_data_storage']) { $allocBytes = [double]$fallback['allocated_data_storage'] }
                         if ($fallback['storage']) { $usedBytes = [double]$fallback['storage'] }
                     }
@@ -2126,12 +2126,12 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
 
         # Improvement #5: SQL Server-level backup storage consumption
         try {
-            $sqlServers = Local:Invoke-ARGSafe -Query $argQueries.SqlServers -SubId $subId -ResourceTypeName 'SqlServers' -MaxAttempts $maxRetries
+            $sqlServers = Invoke-ARGSafe -Query $argQueries.SqlServers -SubId $subId -ResourceTypeName 'SqlServers' -MaxAttempts $maxRetries
             if ($sqlServers -and -not $skipMetrics) {
                 Write-Host "  [$subName] Fetching SQL backup storage metrics ($($sqlServers.Count) servers)..." -ForegroundColor DarkCyan
                 foreach ($srv in $sqlServers) {
                     try {
-                        $bkMetrics = Local:Get-MultiMetricSafe -ResourceId $srv.id `
+                        $bkMetrics = Get-MultiMetricSafe -ResourceId $srv.id `
                             -MetricNames @('database_backup_storage_used') -AggType 'Maximum'
                         $bkUsed = $bkMetrics['database_backup_storage_used']
                         if ($bkUsed) {
@@ -2157,11 +2157,11 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
 
         # SQL Elastic Pools
         try {
-            $sqlEPs = Local:Invoke-ARGSafe -Query $argQueries.SqlElasticPools -SubId $subId -ResourceTypeName 'SqlElasticPools' -MaxAttempts $maxRetries
+            $sqlEPs = Invoke-ARGSafe -Query $argQueries.SqlElasticPools -SubId $subId -ResourceTypeName 'SqlElasticPools' -MaxAttempts $maxRetries
             if ($sqlEPs) {
                 $epMetricMap = $null
                 if (-not $skipMetrics) {
-                    $epMetricMap = Local:Invoke-MetricBatch -Resources $sqlEPs `
+                    $epMetricMap = Invoke-MetricBatch -Resources $sqlEPs `
                         -MetricNamespace 'microsoft.sql/servers/elasticpools' `
                         -MetricNames @('allocated_data_storage','storage_used','storage_percent','eDTU_used','cpu_percent') -AggType 'Maximum'
                 }
@@ -2176,7 +2176,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
                         if ($epMetricMap[$key]['eDTU_used'])              { $epDtuUsed    = [double]$epMetricMap[$key]['eDTU_used'] }
                         if ($epMetricMap[$key]['cpu_percent'])            { $epCpuPct     = [double]$epMetricMap[$key]['cpu_percent'] }
                     } elseif (-not $skipMetrics) {
-                        $fb = Local:Get-MultiMetricSafe -ResourceId $ep.id -MetricNames @('allocated_data_storage','storage_used','storage_percent','eDTU_used','cpu_percent')
+                        $fb = Get-MultiMetricSafe -ResourceId $ep.id -MetricNames @('allocated_data_storage','storage_used','storage_percent','eDTU_used','cpu_percent')
                         if ($fb['allocated_data_storage']) { $epAllocBytes = [double]$fb['allocated_data_storage'] }
                         if ($fb['storage_used'])           { $epUsedBytes  = [double]$fb['storage_used'] }
                         if ($fb['storage_percent'])        { $epStoragePct = [double]$fb['storage_percent'] }
@@ -2229,8 +2229,8 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
 
         # MySQL Servers (Improvement #7: backup_storage_used metric)
         try {
-            $mysqlServers = Local:Invoke-ARGSafe -Query $argQueries.MySqlFlexible -SubId $subId -ResourceTypeName 'MySQLServers' -MaxAttempts $maxRetries
-            $mysqlSingleServers = Local:Invoke-ARGSafe -Query $argQueries.MySqlSingle -SubId $subId -ResourceTypeName 'MySQLSingleServers' -MaxAttempts $maxRetries
+            $mysqlServers = Invoke-ARGSafe -Query $argQueries.MySqlFlexible -SubId $subId -ResourceTypeName 'MySQLServers' -MaxAttempts $maxRetries
+            $mysqlSingleServers = Invoke-ARGSafe -Query $argQueries.MySqlSingle -SubId $subId -ResourceTypeName 'MySQLSingleServers' -MaxAttempts $maxRetries
 
             $allMySqlServers = @()
             if ($mysqlServers) { $allMySqlServers += $mysqlServers }
@@ -2239,14 +2239,14 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
             if ($allMySqlServers.Count -gt 0) {
                 $mysqlMetricMap = $null
                 if (-not $skipMetrics -and $mysqlServers -and $mysqlServers.Count -gt 0) {
-                    $mysqlMetricMap = Local:Invoke-MetricBatch -Resources $mysqlServers `
+                    $mysqlMetricMap = Invoke-MetricBatch -Resources $mysqlServers `
                         -MetricNamespace 'microsoft.dbformysql/flexibleservers' `
                         -MetricNames @('storage_used','storage_percent','backup_storage_used') -AggType 'Maximum'
                 }
                 $mysqlSingleMetricMap = @{}
                 if (-not $skipMetrics -and $mysqlSingleServers) {
                     foreach ($singleSrv in $mysqlSingleServers) {
-                        $fb = Local:Get-MultiMetricSafe -ResourceId $singleSrv.id -MetricNames @('storage_used','storage_percent','backup_storage_used')
+                        $fb = Get-MultiMetricSafe -ResourceId $singleSrv.id -MetricNames @('storage_used','storage_percent','backup_storage_used')
                         $mysqlSingleMetricMap[$singleSrv.id.ToLower()] = $fb
                     }
                 }
@@ -2266,7 +2266,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
                         $storagePct       = $mysqlMetricMap[$key]['storage_percent']
                         $backupStorageUsed = $mysqlMetricMap[$key]['backup_storage_used']
                     } elseif (-not $skipMetrics) {
-                        $fb = Local:Get-MultiMetricSafe -ResourceId $mysql.id -MetricNames @('storage_used','storage_percent','backup_storage_used')
+                        $fb = Get-MultiMetricSafe -ResourceId $mysql.id -MetricNames @('storage_used','storage_percent','backup_storage_used')
                         $storageUsed = $fb['storage_used']; $storagePct = $fb['storage_percent']; $backupStorageUsed = $fb['backup_storage_used']
                     }
 
@@ -2312,8 +2312,8 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
 
         # PostgreSQL Servers (Improvement #7: backup_storage_used metric)
         try {
-            $pgServers = Local:Invoke-ARGSafe -Query $argQueries.PostgreSqlFlexible -SubId $subId -ResourceTypeName 'PostgreSQLServers' -MaxAttempts $maxRetries
-            $pgSingleServers = Local:Invoke-ARGSafe -Query $argQueries.PostgreSqlSingle -SubId $subId -ResourceTypeName 'PostgreSQLSingleServers' -MaxAttempts $maxRetries
+            $pgServers = Invoke-ARGSafe -Query $argQueries.PostgreSqlFlexible -SubId $subId -ResourceTypeName 'PostgreSQLServers' -MaxAttempts $maxRetries
+            $pgSingleServers = Invoke-ARGSafe -Query $argQueries.PostgreSqlSingle -SubId $subId -ResourceTypeName 'PostgreSQLSingleServers' -MaxAttempts $maxRetries
 
             $allPgServers = @()
             if ($pgServers) { $allPgServers += $pgServers }
@@ -2322,14 +2322,14 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
             if ($allPgServers.Count -gt 0) {
                 $pgMetricMap = $null
                 if (-not $skipMetrics -and $pgServers -and $pgServers.Count -gt 0) {
-                    $pgMetricMap = Local:Invoke-MetricBatch -Resources $pgServers `
+                    $pgMetricMap = Invoke-MetricBatch -Resources $pgServers `
                         -MetricNamespace 'microsoft.dbforpostgresql/flexibleservers' `
                         -MetricNames @('storage_used','storage_percent','backup_storage_used') -AggType 'Maximum'
                 }
                 $pgSingleMetricMap = @{}
                 if (-not $skipMetrics -and $pgSingleServers) {
                     foreach ($singleSrv in $pgSingleServers) {
-                        $fb = Local:Get-MultiMetricSafe -ResourceId $singleSrv.id -MetricNames @('storage_used','storage_percent','backup_storage_used')
+                        $fb = Get-MultiMetricSafe -ResourceId $singleSrv.id -MetricNames @('storage_used','storage_percent','backup_storage_used')
                         $pgSingleMetricMap[$singleSrv.id.ToLower()] = $fb
                     }
                 }
@@ -2349,7 +2349,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
                         $storagePct       = $pgMetricMap[$key]['storage_percent']
                         $backupStorageUsed = $pgMetricMap[$key]['backup_storage_used']
                     } elseif (-not $skipMetrics) {
-                        $fb = Local:Get-MultiMetricSafe -ResourceId $pg.id -MetricNames @('storage_used','storage_percent','backup_storage_used')
+                        $fb = Get-MultiMetricSafe -ResourceId $pg.id -MetricNames @('storage_used','storage_percent','backup_storage_used')
                         $storageUsed = $fb['storage_used']; $storagePct = $fb['storage_percent']; $backupStorageUsed = $fb['backup_storage_used']
                     }
 
@@ -2397,11 +2397,11 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
     if ($selectedRef.COSMOS) {
         Write-Host "  [$subName] Discovering CosmosDB via ARG..." -ForegroundColor DarkCyan
         try {
-            $cosmosAccounts = Local:Invoke-ARGSafe -Query $argQueries.CosmosDB -SubId $subId -ResourceTypeName 'CosmosDB' -MaxAttempts $maxRetries
+            $cosmosAccounts = Invoke-ARGSafe -Query $argQueries.CosmosDB -SubId $subId -ResourceTypeName 'CosmosDB' -MaxAttempts $maxRetries
             if ($cosmosAccounts) {
                 $cosmosMetricMap = $null
                 if (-not $skipMetrics) {
-                    $cosmosMetricMap = Local:Invoke-MetricBatch -Resources $cosmosAccounts `
+                    $cosmosMetricMap = Invoke-MetricBatch -Resources $cosmosAccounts `
                         -MetricNamespace 'microsoft.documentdb/databaseaccounts' `
                         -MetricNames @('DocumentCount','DataUsage','IndexUsage','PhysicalPartitionSizeInfo','PhysicalPartitionCount') -AggType 'Maximum'
                 }
@@ -2416,7 +2416,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
                         $partSize   = $cosmosMetricMap[$key]['PhysicalPartitionSizeInfo']
                         $partCount  = $cosmosMetricMap[$key]['PhysicalPartitionCount']
                     } elseif (-not $skipMetrics) {
-                        $fb = Local:Get-MultiMetricSafe -ResourceId $cosmos.id `
+                        $fb = Get-MultiMetricSafe -ResourceId $cosmos.id `
                             -MetricNames @('DocumentCount','DataUsage','IndexUsage','PhysicalPartitionSizeInfo','PhysicalPartitionCount')
                         $docCount = $fb['DocumentCount']; $dataUsage = $fb['DataUsage']; $indexUsage = $fb['IndexUsage']
                         $partSize = $fb['PhysicalPartitionSizeInfo']; $partCount = $fb['PhysicalPartitionCount']
@@ -2457,7 +2457,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
     if ($selectedRef.AKS) {
         Write-Host "  [$subName] Discovering AKS clusters via ARG..." -ForegroundColor DarkCyan
         try {
-            $aksClusters = Local:Invoke-ARGSafe -Query $argQueries.AKS -SubId $subId -ResourceTypeName 'AKSClusters' -MaxAttempts $maxRetries
+            $aksClusters = Invoke-ARGSafe -Query $argQueries.AKS -SubId $subId -ResourceTypeName 'AKSClusters' -MaxAttempts $maxRetries
             if ($aksClusters) {
                 $hasKubectl = $false
                 try { $null = Get-Command kubectl -ErrorAction Stop; $hasKubectl = $true } catch {}
@@ -2589,11 +2589,11 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
     if ($selectedRef.RSV) {
         Write-Host "  [$subName] Discovering Recovery Services Vaults via ARG..." -ForegroundColor DarkCyan
         try {
-            $rsvVaults = Local:Invoke-ARGSafe -Query $argQueries.RSVVaults -SubId $subId -ResourceTypeName 'RSVVaults' -MaxAttempts $maxRetries
-            $rsvItems = Local:Invoke-ARGSafe -Query $argQueries.RSVProtectedItems -SubId $subId -ResourceTypeName 'RSVProtectedItems' -MaxAttempts $maxRetries
+            $rsvVaults = Invoke-ARGSafe -Query $argQueries.RSVVaults -SubId $subId -ResourceTypeName 'RSVVaults' -MaxAttempts $maxRetries
+            $rsvItems = Invoke-ARGSafe -Query $argQueries.RSVProtectedItems -SubId $subId -ResourceTypeName 'RSVProtectedItems' -MaxAttempts $maxRetries
 
             $vaultItemCounts = @{}
-            $token = Local:Get-BearerToken
+            $token = Get-BearerToken
 
             if ($rsvItems) {
                 foreach ($item in $rsvItems) {
@@ -2606,7 +2606,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
                     if ($token) {
                         try {
                             $itemUri = "https://management.azure.com$($item.id)?api-version=2024-10-01&`$expand=extendedInfo"
-                            $itemDetail = Local:Invoke-AzRestSafe -Uri $itemUri -Token $token -Retries 2
+                            $itemDetail = Invoke-AzRestSafe -Uri $itemUri -Token $token -Retries 2
                             if ($itemDetail -and $itemDetail.properties -and $itemDetail.properties.extendedInfo) {
                                 $ext = $itemDetail.properties.extendedInfo
                                 if ($ext.protectedItemDataSourceSizeInBytes) {
@@ -2640,7 +2640,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
                     if ($token) {
                         try {
                             $rpUri = "https://management.azure.com$($item.id)/recoveryPoints?api-version=2024-10-01&`$top=100"
-                            $rpResp = Local:Invoke-AzRestSafe -Uri $rpUri -Token $token -Retries 2
+                            $rpResp = Invoke-AzRestSafe -Uri $rpUri -Token $token -Retries 2
                             if ($rpResp -and $rpResp.value) {
                                 foreach ($rp in $rpResp.value) {
                                     $null = $subResults.RSVRecoveryPoints.Add([PSCustomObject]@{
@@ -2671,7 +2671,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
                     if ($token) {
                         try {
                             $usagesUri = "https://management.azure.com$($vault.id)/usages?api-version=2024-10-01"
-                            $usagesResp = Local:Invoke-AzRestSafe -Uri $usagesUri -Token $token
+                            $usagesResp = Invoke-AzRestSafe -Uri $usagesUri -Token $token
                             if ($usagesResp -and $usagesResp.value) {
                                 $storageParts = @()
                                 foreach ($usage in $usagesResp.value) {
@@ -2711,7 +2711,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
             }
 
             # RSV Backup Policies
-            $rsvPolicies = Local:Invoke-ARGSafe -Query $argQueries.RSVBackupPolicies -SubId $subId -ResourceTypeName 'RSVBackupPolicies' -MaxAttempts $maxRetries
+            $rsvPolicies = Invoke-ARGSafe -Query $argQueries.RSVBackupPolicies -SubId $subId -ResourceTypeName 'RSVBackupPolicies' -MaxAttempts $maxRetries
             if ($rsvPolicies) {
                 foreach ($pol in $rsvPolicies) {
                     $dailyRetention  = if ($pol.retentionDailyCount)  { "$($pol.retentionDailyCount) $($pol.retentionDailyType)" } else { '' }
@@ -2751,16 +2751,16 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
     if ($selectedRef.BACKUP) {
         Write-Host "  [$subName] Discovering Backup Vaults via ARG..." -ForegroundColor DarkCyan
         try {
-            $bkVaults = Local:Invoke-ARGSafe -Query $argQueries.BackupVaults -SubId $subId -ResourceTypeName 'BackupVaults' -MaxAttempts $maxRetries
+            $bkVaults = Invoke-ARGSafe -Query $argQueries.BackupVaults -SubId $subId -ResourceTypeName 'BackupVaults' -MaxAttempts $maxRetries
 
             if ($bkVaults) {
-                $token = Local:Get-BearerToken
+                $token = Get-BearerToken
                 foreach ($vault in $bkVaults) {
                     $bkStorageGB = 0; $bkStorageBreakdown = ''
                     if ($token) {
                         try {
                             $bkUsagesUri = "https://management.azure.com$($vault.id)/usages?api-version=2023-01-01"
-                            $bkUsagesResp = Local:Invoke-AzRestSafe -Uri $bkUsagesUri -Token $token
+                            $bkUsagesResp = Invoke-AzRestSafe -Uri $bkUsagesUri -Token $token
                             if ($bkUsagesResp -and $bkUsagesResp.value) {
                                 $bkParts = @()
                                 foreach ($usage in $bkUsagesResp.value) {
@@ -2796,7 +2796,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
                     if ($token) {
                         try {
                             $polUri = "https://management.azure.com$($vault.id)/backupPolicies?api-version=2023-01-01"
-                            $polResp = Local:Invoke-AzRestSafe -Uri $polUri -Token $token
+                            $polResp = Invoke-AzRestSafe -Uri $polUri -Token $token
                             if ($polResp -and $polResp.value) {
                                 foreach ($pol in $polResp.value) {
                                     $retentionRules = @()
@@ -2832,7 +2832,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
             }
 
             # Backup Instances
-            $bkInstances = Local:Invoke-ARGSafe -Query $argQueries.BackupInstances -SubId $subId -ResourceTypeName 'BackupInstances' -MaxAttempts $maxRetries
+            $bkInstances = Invoke-ARGSafe -Query $argQueries.BackupInstances -SubId $subId -ResourceTypeName 'BackupInstances' -MaxAttempts $maxRetries
             if ($bkInstances) {
                 foreach ($inst in $bkInstances) {
                     $null = $subResults.BackupInstances.Add([PSCustomObject]@{
@@ -2859,7 +2859,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
     if ($selectedRef.SNAPSHOT) {
         Write-Host "  [$subName] Discovering Disk Snapshots via ARG..." -ForegroundColor DarkCyan
         try {
-            $snapshots = Local:Invoke-ARGSafe -Query $argQueries.DiskSnapshots -SubId $subId -ResourceTypeName 'DiskSnapshots' -MaxAttempts $maxRetries
+            $snapshots = Invoke-ARGSafe -Query $argQueries.DiskSnapshots -SubId $subId -ResourceTypeName 'DiskSnapshots' -MaxAttempts $maxRetries
             if ($snapshots) {
                 foreach ($snap in $snapshots) {
                     $snapSizeGB = if ($snap.diskSizeGB) { [int]$snap.diskSizeGB } else { 0 }
@@ -2895,9 +2895,9 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
     if ($selectedRef.RSV -or $selectedRef.VM) {
         Write-Host "  [$subName] Discovering VM Restore Point Collections via ARG..." -ForegroundColor DarkCyan
         try {
-            $rpCollections = Local:Invoke-ARGSafe -Query $argQueries.RestorePointCollections -SubId $subId -ResourceTypeName 'RestorePointCollections' -MaxAttempts $maxRetries
+            $rpCollections = Invoke-ARGSafe -Query $argQueries.RestorePointCollections -SubId $subId -ResourceTypeName 'RestorePointCollections' -MaxAttempts $maxRetries
             if ($rpCollections) {
-                $token = Local:Get-BearerToken
+                $token = Get-BearerToken
                 foreach ($rpc in $rpCollections) {
                     $rpCount = if ($rpc.restorePointCount) { [int]$rpc.restorePointCount } else { 0 }
                     $totalDiskSizeGB = 0
@@ -2906,7 +2906,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
                     if ($token -and $rpCount -gt 0) {
                         try {
                             $rpcUri = "https://management.azure.com$($rpc.id)/restorePoints?api-version=2024-03-01"
-                            $rpcResp = Local:Invoke-AzRestSafe -Uri $rpcUri -Token $token -Retries 2
+                            $rpcResp = Invoke-AzRestSafe -Uri $rpcUri -Token $token -Retries 2
                             if ($rpcResp -and $rpcResp.value) {
                                 $rpCount = $rpcResp.value.Count
                                 foreach ($rp in $rpcResp.value) {
@@ -2947,9 +2947,9 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
     if ($selectedRef.ASR) {
         Write-Host "  [$subName] Discovering ASR Replicated Items via ARG..." -ForegroundColor DarkCyan
         try {
-            $asrItems = Local:Invoke-ARGSafe -Query $argQueries.ASRReplicatedItems -SubId $subId -ResourceTypeName 'ASRReplicatedItems' -MaxAttempts $maxRetries
+            $asrItems = Invoke-ARGSafe -Query $argQueries.ASRReplicatedItems -SubId $subId -ResourceTypeName 'ASRReplicatedItems' -MaxAttempts $maxRetries
             if ($asrItems) {
-                $token = Local:Get-BearerToken
+                $token = Get-BearerToken
                 foreach ($asr in $asrItems) {
                     $replicaDiskSizeGB = 0
                     $replicaDiskCount  = 0
@@ -2958,7 +2958,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
                     if ($token) {
                         try {
                             $asrUri = "https://management.azure.com$($asr.id)?api-version=2024-10-01"
-                            $asrDetail = Local:Invoke-AzRestSafe -Uri $asrUri -Token $token -Retries 2
+                            $asrDetail = Invoke-AzRestSafe -Uri $asrUri -Token $token -Retries 2
                             if ($asrDetail -and $asrDetail.properties.providerSpecificDetails) {
                                 $psd = $asrDetail.properties.providerSpecificDetails
                                 # A2A protection: protectedManagedDisks or a2AProtectedManagedDiskDetails
