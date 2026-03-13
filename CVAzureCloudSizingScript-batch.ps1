@@ -1106,25 +1106,25 @@ RecoveryServicesResources
 "@
 
     RSVBackupPolicies = @"
-RecoveryServicesResources
+recoveryservicesresources
 | where type =~ 'microsoft.recoveryservices/vaults/backuppolicies'
-| project id, name, subscriptionId,
-          vaultName = tostring(split(split(id, '/Microsoft.RecoveryServices/vaults/')[1],'/')[0]),
+| extend vaultName = tostring(split(id, '/')[8])
+| project id, name, subscriptionId, vaultName,
           backupManagementType = tostring(properties.backupManagementType),
           policyType = tostring(properties.policyType),
-          protectedItemsCount = toint(properties.protectedItemsCount),
+          protectedItemsCount = tostring(properties.protectedItemsCount),
           scheduleFrequency = tostring(properties.schedulePolicy.schedulePolicyType),
           scheduleRunFrequency = tostring(properties.schedulePolicy.scheduleRunFrequency),
           scheduleRunTimes = tostring(properties.schedulePolicy.scheduleRunTimes),
-          retentionDailyCount = toint(properties.retentionPolicy.dailySchedule.retentionDuration.count),
+          retentionDailyCount = tostring(properties.retentionPolicy.dailySchedule.retentionDuration.count),
           retentionDailyType = tostring(properties.retentionPolicy.dailySchedule.retentionDuration.durationType),
-          retentionWeeklyCount = toint(properties.retentionPolicy.weeklySchedule.retentionDuration.count),
+          retentionWeeklyCount = tostring(properties.retentionPolicy.weeklySchedule.retentionDuration.count),
           retentionWeeklyType = tostring(properties.retentionPolicy.weeklySchedule.retentionDuration.durationType),
-          retentionMonthlyCount = toint(properties.retentionPolicy.monthlySchedule.retentionDuration.count),
+          retentionMonthlyCount = tostring(properties.retentionPolicy.monthlySchedule.retentionDuration.count),
           retentionMonthlyType = tostring(properties.retentionPolicy.monthlySchedule.retentionDuration.durationType),
-          retentionYearlyCount = toint(properties.retentionPolicy.yearlySchedule.retentionDuration.count),
+          retentionYearlyCount = tostring(properties.retentionPolicy.yearlySchedule.retentionDuration.count),
           retentionYearlyType = tostring(properties.retentionPolicy.yearlySchedule.retentionDuration.durationType),
-          instantRpDays = toint(properties.instantRpRetentionRangeInDays),
+          instantRpDays = tostring(properties.instantRpRetentionRangeInDays),
           timeZone = tostring(properties.timeZone)
 "@
 
@@ -1486,7 +1486,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
                     break
                 } catch {
                     $errMsg = $_.Exception.Message
-                    $isAccessDenied = $errMsg -match 'AccessDenied' -or $errMsg -match 'AuthorizationFailed' -or $errMsg -match 'does not have authorization'
+                    $isAccessDenied = $errMsg -match 'AccessDenied' -or $errMsg -match 'AuthorizationFailed' -or $errMsg -match 'does not have authorization' -or $errMsg -match 'Forbidden'
                     $isQueryError   = $errMsg -match 'InvalidQuery' -or $errMsg -match 'ParserFailure' -or $errMsg -match 'BadRequest'
                     $isThrottled    = $errMsg -match '429' -or $errMsg -match 'throttl'
                     $isTransient    = $errMsg -match '5\d{2}' -or $errMsg -match 'service unavailable'
@@ -1780,7 +1780,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
                     # File Shares (Improvement #10: snapshot count via REST)
                     if ($selectedRef.FILESHARE) {
                         if ($sa.saKind -in @('BlobStorage','BlockBlobStorage')) { continue }
-                        if ($sa.hnsEnabled -eq 'true') { continue }
+                        # Note: HNS-enabled (ADLS Gen2) accounts CAN have NFS file shares, so we don't skip them
                         try {
                             $shares = Get-AzRmStorageShare -ResourceGroupName $sa.resourceGroup -StorageAccountName $sa.name -ErrorAction SilentlyContinue
                             if ($shares) {
@@ -2124,26 +2124,55 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
             Write-Warning "  [$subName] SQL DB discovery failed: $($_.Exception.Message)"
         }
 
-        # Improvement #5: SQL Server-level backup storage consumption
+        # Improvement #5: SQL Server-level backup storage consumption via REST API
+        # Uses usages endpoint which returns backup storage consumed per server
         try {
             $sqlServers = Invoke-ARGSafe -Query $argQueries.SqlServers -SubId $subId -ResourceTypeName 'SqlServers' -MaxAttempts $maxRetries
-            if ($sqlServers -and -not $skipMetrics) {
-                Write-Host "  [$subName] Fetching SQL backup storage metrics ($($sqlServers.Count) servers)..." -ForegroundColor DarkCyan
+            if ($sqlServers) {
+                Write-Host "  [$subName] Fetching SQL backup storage via REST API ($($sqlServers.Count) servers)..." -ForegroundColor DarkCyan
+                $bkToken = Get-BearerToken
                 foreach ($srv in $sqlServers) {
                     try {
-                        $bkMetrics = Get-MultiMetricSafe -ResourceId $srv.id `
-                            -MetricNames @('database_backup_storage_used') -AggType 'Maximum'
-                        $bkUsed = $bkMetrics['database_backup_storage_used']
-                        if ($bkUsed) {
-                            $null = $subResults.SqlBackupStorage.Add([PSCustomObject]@{
-                                Subscription       = $subName
-                                ServerName         = $srv.name
-                                ResourceGroup      = $srv.resourceGroup
-                                Region             = $srv.location
-                                BackupStorageBytes = [double]$bkUsed
-                                BackupStorageGB    = [math]::Round([double]$bkUsed / 1e9, 3)
-                                BackupStorageTB    = [math]::Round([double]$bkUsed / 1e12, 4)
-                            })
+                        if ($bkToken) {
+                            $usagesUri = "https://management.azure.com$($srv.id)/usages?api-version=2021-11-01"
+                            $usagesResp = Invoke-AzRestSafe -Uri $usagesUri -Token $bkToken
+                            if ($usagesResp -and $usagesResp.value) {
+                                $bkUsage = $usagesResp.value | Where-Object { $_.name -eq 'server_backup_storage' -or $_.properties.displayName -match 'backup' }
+                                if ($bkUsage) {
+                                    $bkBytes = 0
+                                    foreach ($u in $bkUsage) {
+                                        if ($u.properties.currentValue) { $bkBytes += [double]$u.properties.currentValue }
+                                        elseif ($u.currentValue) { $bkBytes += [double]$u.currentValue }
+                                    }
+                                    if ($bkBytes -gt 0) {
+                                        $null = $subResults.SqlBackupStorage.Add([PSCustomObject]@{
+                                            Subscription       = $subName
+                                            ServerName         = $srv.name
+                                            ResourceGroup      = $srv.resourceGroup
+                                            Region             = $srv.location
+                                            BackupStorageBytes = $bkBytes
+                                            BackupStorageGB    = [math]::Round($bkBytes / 1e9, 3)
+                                            BackupStorageTB    = [math]::Round($bkBytes / 1e12, 4)
+                                        })
+                                    }
+                                }
+                            }
+                        } elseif (-not $skipMetrics) {
+                            # Fallback: try database-level metric aggregation
+                            $bkMetrics = Get-MultiMetricSafe -ResourceId $srv.id `
+                                -MetricNames @('backup_storage_used') -AggType 'Maximum'
+                            $bkUsed = $bkMetrics['backup_storage_used']
+                            if ($bkUsed) {
+                                $null = $subResults.SqlBackupStorage.Add([PSCustomObject]@{
+                                    Subscription       = $subName
+                                    ServerName         = $srv.name
+                                    ResourceGroup      = $srv.resourceGroup
+                                    Region             = $srv.location
+                                    BackupStorageBytes = [double]$bkUsed
+                                    BackupStorageGB    = [math]::Round([double]$bkUsed / 1e9, 3)
+                                    BackupStorageTB    = [math]::Round([double]$bkUsed / 1e12, 4)
+                                })
+                            }
                         }
                     } catch { }
                 }
