@@ -1387,7 +1387,7 @@ $parallelResults = $subInfoList | ForEach-Object -ThrottleLimit $ThreadCount -Pa
         }
 
         # Get bearer token once for all batches
-        $token = Local:Get-BearerToken
+        $token = Get-BearerToken
         if (-not $token) {
             Write-Warning "  [$subName] Batch API: token acquisition failed, falling back to individual calls"
             return $null  # Signal caller to use individual fallback
