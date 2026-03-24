@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PyCore — Python Fundamentals Trainer</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f14;
+    --surface: #13161e;
+    --surface2: #1a1e2a;
+    --border: #252a38;
+    --accent: #4ade80;
+    --accent2: #38bdf8;
+    --accent3: #f59e0b;
+    --danger: #f87171;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --code-bg: #0a0c10;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Syne', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Ambient background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(74,222,128,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(74,222,128,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    top: -200px;
+    right: -200px;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(74,222,128,0.06) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  #app {
+    position: relative;
+    z-index: 1;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 24px 20px 60px;
+  }
+
+  /* Header */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 24px 0 32px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 32px;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 38px;
+    height: 38px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 16px;
+    color: #0d0f14;
+  }
+
+  .logo-text {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+  }
+
+  .logo-text span { color: var(--accent); }
+
+  .progress-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--accent);
+    background: rgba(74,222,128,0.1);
+    border: 1px solid rgba(74,222,128,0.25);
+    padding: 6px 14px;
+    border-radius: 999px;
+  }
+
+  /* Topic selector */
+  .section-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  .topics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 10px;
+    margin-bottom: 32px;
+  }
+
+  .topic-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 12px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    text-align: left;
+    transition: all 0.18s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .topic-btn:hover {
+    border-color: var(--accent);
+    color: var(--text);
+    background: var(--surface2);
+  }
+
+  .topic-btn.active {
+    border-color: var(--accent);
+    background: rgba(74,222,128,0.08);
+    color: var(--accent);
+  }
+
+  .topic-btn .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+  }
+
+  /* Mode selector */
+  .modes {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 28px;
+  }
+
+  .mode-btn {
+    flex: 1;
+    padding: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--muted);
+    cursor: pointer;
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.18s;
+    text-align: center;
+  }
+
+  .mode-btn:hover { border-color: var(--accent2); color: var(--text); }
+  .mode-btn.active {
+    border-color: var(--accent2);
+    background: rgba(56,189,248,0.08);
+    color: var(--accent2);
+  }
+
+  /* Main card */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+
+  .card-header {
+    background: var(--surface2);
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .card-header .dots { display: flex; gap: 6px; }
+  .card-header .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .dot-r { background: #f87171; }
+  .dot-y { background: var(--accent3); }
+  .dot-g { background: var(--accent); }
+
+  .card-body { padding: 24px; }
+
+  /* Question area */
+  #question-area {
+    min-height: 120px;
+    line-height: 1.7;
+    font-size: 15px;
+  }
+
+  #question-area h3 {
+    font-size: 17px;
+    font-weight: 700;
+    margin-bottom: 14px;
+    color: var(--text);
+  }
+
+  /* Code block */
+  .code-block {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin: 14px 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.7;
+    color: #a5b4fc;
+    overflow-x: auto;
+    white-space: pre;
+  }
+
+  .kw { color: #f472b6; }
+  .fn { color: #4ade80; }
+  .st { color: #fbbf24; }
+  .cm { color: #475569; }
+  .nm { color: #38bdf8; }
+
+  /* Answer input */
+  .answer-section { margin-top: 20px; }
+
+  .answer-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  #answer-input {
+    width: 100%;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    resize: vertical;
+    min-height: 80px;
+    transition: border-color 0.18s;
+    outline: none;
+  }
+
+  #answer-input:focus { border-color: var(--accent2); }
+
+  /* Options for MCQ */
+  .options { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+
+  .option-btn {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 13px 16px;
+    color: var(--text);
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    text-align: left;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .option-btn:hover:not(:disabled) {
+    border-color: var(--accent2);
+    background: rgba(56,189,248,0.06);
+  }
+
+  .option-btn .opt-label {
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    background: var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+    color: var(--muted);
+  }
+
+  .option-btn.correct { border-color: var(--accent); background: rgba(74,222,128,0.08); }
+  .option-btn.correct .opt-label { background: var(--accent); color: #0d0f14; }
+  .option-btn.wrong { border-color: var(--danger); background: rgba(248,113,113,0.08); }
+  .option-btn.wrong .opt-label { background: var(--danger); color: #0d0f14; }
+  .option-btn:disabled { cursor: default; opacity: 0.8; }
+
+  /* Feedback */
+  #feedback {
+    margin-top: 18px;
+    padding: 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    line-height: 1.65;
+    display: none;
+  }
+
+  #feedback.success {
+    background: rgba(74,222,128,0.08);
+    border: 1px solid rgba(74,222,128,0.3);
+    color: #86efac;
+    display: block;
+  }
+
+  #feedback.error {
+    background: rgba(248,113,113,0.08);
+    border: 1px solid rgba(248,113,113,0.3);
+    color: #fca5a5;
+    display: block;
+  }
+
+  #feedback.info {
+    background: rgba(56,189,248,0.08);
+    border: 1px solid rgba(56,189,248,0.25);
+    color: #7dd3fc;
+    display: block;
+  }
+
+  #feedback strong { display: block; margin-bottom: 6px; font-size: 13px; letter-spacing: 0.5px; }
+
+  /* Action buttons */
+  .actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    padding: 11px 24px;
+    border-radius: 8px;
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.18s;
+    border: 1px solid transparent;
+    letter-spacing: 0.3px;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #0d0f14;
+    border-color: var(--accent);
+  }
+
+  .btn-primary:hover { background: #86efac; border-color: #86efac; }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--muted);
+    border-color: var(--border);
+  }
+
+  .btn-secondary:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--muted);
+    border-color: transparent;
+    padding: 11px 14px;
+  }
+
+  .btn-ghost:hover { color: var(--text); }
+
+  /* Explain panel */
+  #explain-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    display: none;
+  }
+
+  #explain-panel.visible { display: block; }
+
+  .explain-header {
+    background: rgba(56,189,248,0.06);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent2);
+  }
+
+  #explain-content {
+    padding: 20px;
+    font-size: 14px;
+    line-height: 1.75;
+    color: var(--text);
+  }
+
+  /* Loading */
+  .loader {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+  }
+
+  .loader-dots span {
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 1.2s infinite;
+  }
+
+  .loader-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .loader-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes pulse {
+    0%, 60%, 100% { opacity: 0.2; transform: scale(0.8); }
+    30% { opacity: 1; transform: scale(1); }
+  }
+
+  /* Score bar */
+  .score-bar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 20px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 20px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+  }
+
+  .score-stat { display: flex; flex-direction: column; gap: 2px; }
+  .score-stat .val { font-size: 20px; font-weight: 700; color: var(--accent); }
+  .score-stat .lbl { color: var(--muted); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
+  .score-divider { width: 1px; height: 32px; background: var(--border); }
+
+  /* Cheat sheet */
+  #cheatsheet {
+    display: none;
+    margin-top: 20px;
+  }
+
+  #cheatsheet.visible { display: block; }
+
+  .cheat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .cheat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+  }
+
+  .cheat-card h4 {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--accent3);
+    margin-bottom: 10px;
+  }
+
+  .cheat-card pre {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    color: #a5b4fc;
+    line-height: 1.7;
+    white-space: pre-wrap;
+  }
+
+  @media (max-width: 600px) {
+    .cheat-grid { grid-template-columns: 1fr; }
+    .modes { flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="logo">
+      <div class="logo-icon">Py</div>
+      <div class="logo-text">Py<span>Core</span></div>
+    </div>
+    <div class="progress-badge" id="progress-badge">0 / 0 correct</div>
+  </header>
+
+  <!-- Score bar -->
+  <div class="score-bar">
+    <div class="score-stat">
+      <div class="val" id="score-correct">0</div>
+      <div class="lbl">Correct</div>
+    </div>
+    <div class="score-divider"></div>
+    <div class="score-stat">
+      <div class="val" id="score-total" style="color:var(--accent2)">0</div>
+      <div class="lbl">Attempted</div>
+    </div>
+    <div class="score-divider"></div>
+    <div class="score-stat">
+      <div class="val" id="score-pct" style="color:var(--accent3)">—</div>
+      <div class="lbl">Accuracy</div>
+    </div>
+  </div>
+
+  <!-- Topic picker -->
+  <div class="section-label">Select Topic</div>
+  <div class="topics-grid" id="topics-grid"></div>
+
+  <!-- Mode selector -->
+  <div class="section-label">Mode</div>
+  <div class="modes">
+    <button class="mode-btn active" data-mode="explain">📖 Teach Me</button>
+    <button class="mode-btn" data-mode="mcq">🎯 Quiz (MCQ)</button>
+    <button class="mode-btn" data-mode="freeform">✍️ Write It</button>
+    <button class="mode-btn" data-mode="cheatsheet">📋 Cheat Sheet</button>
+  </div>
+
+  <!-- Main question card -->
+  <div class="card" id="main-card">
+    <div class="card-header">
+      <div class="dots">
+        <div class="dot dot-r"></div>
+        <div class="dot dot-y"></div>
+        <div class="dot dot-g"></div>
+      </div>
+      <span id="card-filename">pycore.py</span>
+    </div>
+    <div class="card-body">
+      <div id="question-area">
+        <h3>Welcome to PyCore</h3>
+        <p style="color:var(--muted);font-size:14px;line-height:1.7">Pick a topic above, then choose a mode.<br><br>
+          <span style="color:var(--accent)">📖 Teach Me</span> — Claude explains the concept clearly<br>
+          <span style="color:var(--accent2)">🎯 Quiz (MCQ)</span> — Multiple choice questions<br>
+          <span style="color:var(--accent3)">✍️ Write It</span> — Practice writing real Python<br>
+          <span style="color:var(--muted)">📋 Cheat Sheet</span> — Quick reference syntax
+        </p>
+      </div>
+
+      <div id="options-area" class="options" style="display:none"></div>
+      <div id="answer-section" class="answer-section" style="display:none">
+        <div class="answer-label">Your Answer</div>
+        <textarea id="answer-input" placeholder="Write your Python code or answer here..."></textarea>
+      </div>
+
+      <div id="feedback"></div>
+
+      <div class="actions">
+        <button class="btn btn-primary" id="btn-go" onclick="handleGo()">Generate ↗</button>
+        <button class="btn btn-secondary" id="btn-submit" style="display:none" onclick="handleSubmit()">Check Answer</button>
+        <button class="btn btn-ghost" id="btn-next" style="display:none" onclick="handleNext()">Next Question →</button>
+        <button class="btn btn-ghost" id="btn-explain-more" style="display:none" onclick="explainMore()">Explain More</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Explain panel -->
+  <div id="explain-panel">
+    <div class="explain-header">💡 Claude's Explanation</div>
+    <div id="explain-content"></div>
+  </div>
+
+  <!-- Cheat sheet -->
+  <div id="cheatsheet">
+    <div class="section-label" style="margin-top:4px">Quick Reference</div>
+    <div class="cheat-grid" id="cheat-grid"></div>
+  </div>
+</div>
+
+<script>
+const TOPICS = [
+  { id: 'variables',   label: 'Variables',        icon: '📦' },
+  { id: 'functions',   label: 'Functions',         icon: '🔧' },
+  { id: 'loops',       label: 'Loops',             icon: '🔁' },
+  { id: 'conditionals',label: 'Conditionals',      icon: '🔀' },
+  { id: 'lists',       label: 'Lists',             icon: '📋' },
+  { id: 'dicts',       label: 'Dictionaries',      icon: '🗂️' },
+  { id: 'classes',     label: 'Classes & OOP',     icon: '🏗️' },
+  { id: 'errors',      label: 'Error Handling',    icon: '🛡️' },
+  { id: 'imports',     label: 'Modules & Imports', icon: '📦' },
+  { id: 'comprehensions', label: 'Comprehensions', icon: '⚡' },
+];
+
+const CHEAT_SHEETS = {
+  variables: [
+    { title: 'Assignment', code: 'x = 10\nname = "Alice"\nis_ready = True\npi = 3.14' },
+    { title: 'Multiple Assignment', code: 'a, b, c = 1, 2, 3\nx = y = 0\n*rest, last = [1,2,3,4]' },
+    { title: 'Type Check', code: 'type(x)        # <class \'int\'>\nisinstance(x, int)  # True' },
+    { title: 'f-Strings', code: 'name = "Bob"\nage = 30\nprint(f"{name} is {age}")' },
+  ],
+  functions: [
+    { title: 'Define & Call', code: 'def greet(name):\n    return f"Hello, {name}"\n\nresult = greet("Alice")' },
+    { title: 'Default Args', code: 'def power(base, exp=2):\n    return base ** exp\n\npower(3)    # 9\npower(3, 3) # 27' },
+    { title: '*args / **kwargs', code: 'def add(*nums):\n    return sum(nums)\n\ndef show(**opts):\n    print(opts)' },
+    { title: 'Lambda', code: 'double = lambda x: x * 2\nsquare = lambda x: x ** 2\ndouble(5)  # 10' },
+  ],
+  loops: [
+    { title: 'for loop', code: 'for i in range(5):\n    print(i)\n\nfor item in my_list:\n    print(item)' },
+    { title: 'while loop', code: 'count = 0\nwhile count < 5:\n    count += 1' },
+    { title: 'enumerate / zip', code: 'for i, v in enumerate(lst):\n    print(i, v)\n\nfor a, b in zip(l1, l2):\n    print(a, b)' },
+    { title: 'break / continue', code: 'for x in range(10):\n    if x == 3: continue\n    if x == 7: break\n    print(x)' },
+  ],
+  conditionals: [
+    { title: 'if / elif / else', code: 'if x > 0:\n    print("positive")\nelif x == 0:\n    print("zero")\nelse:\n    print("negative")' },
+    { title: 'Ternary', code: 'label = "even" if x % 2 == 0 else "odd"' },
+    { title: 'Logical Operators', code: 'if a > 0 and b > 0:\n    ...\nif not valid:\n    ...\nif x == 1 or y == 1:\n    ...' },
+    { title: 'in / not in', code: 'if "admin" in roles:\n    ...\nif key not in config:\n    ...' },
+  ],
+  lists: [
+    { title: 'Create & Access', code: 'lst = [1, 2, 3]\nlst[0]    # 1\nlst[-1]   # 3\nlst[1:3]  # [2, 3]' },
+    { title: 'Modify', code: 'lst.append(4)\nlst.insert(0, 0)\nlst.remove(2)\npopped = lst.pop()' },
+    { title: 'List Ops', code: 'len(lst)\nsorted(lst)\nlst.sort()\nlst.reverse()\n3 in lst  # True' },
+    { title: 'Comprehension', code: 'squares = [x**2 for x in range(10)]\nevens = [x for x in lst if x%2==0]' },
+  ],
+  dicts: [
+    { title: 'Create & Access', code: 'd = {"key": "val", "n": 42}\nd["key"]         # "val"\nd.get("x", 0)   # 0 (safe)' },
+    { title: 'Modify', code: 'd["new"] = True\ndel d["key"]\nd.update({"a":1})' },
+    { title: 'Iteration', code: 'for k in d:\n    print(k, d[k])\nfor k, v in d.items():\n    print(k, v)' },
+    { title: 'Dict Comp', code: 'sq = {x: x**2 for x in range(5)}\ninv = {v: k for k, v in d.items()}' },
+  ],
+  classes: [
+    { title: 'Define Class', code: 'class Dog:\n    def __init__(self, name):\n        self.name = name\n    def bark(self):\n        return f"{self.name}: Woof!"' },
+    { title: 'Instantiate', code: 'rex = Dog("Rex")\nrex.bark()  # "Rex: Woof!"' },
+    { title: 'Inheritance', code: 'class Poodle(Dog):\n    def bark(self):\n        return "Yip!"' },
+    { title: 'Dunder Methods', code: '__str__   # str(obj)\n__repr__  # repr(obj)\n__len__   # len(obj)\n__eq__    # obj == other' },
+  ],
+  errors: [
+    { title: 'try / except', code: 'try:\n    result = 10 / x\nexcept ZeroDivisionError:\n    print("divide by zero")\nexcept Exception as e:\n    print(e)' },
+    { title: 'finally / else', code: 'try:\n    ...\nexcept ValueError:\n    ...\nelse:\n    print("no error")\nfinally:\n    print("always runs")' },
+    { title: 'Raise', code: 'raise ValueError("bad input")\nraise TypeError(f"got {type(x)}")' },
+    { title: 'Custom Exception', code: 'class AppError(Exception):\n    pass\n\nraise AppError("oops")' },
+  ],
+  imports: [
+    { title: 'import', code: 'import os\nimport sys\nimport json\n\nos.getcwd()' },
+    { title: 'from import', code: 'from os.path import join, exists\nfrom datetime import datetime\nnow = datetime.now()' },
+    { title: 'Alias', code: 'import numpy as np\nimport pandas as pd\nimport datetime as dt' },
+    { title: 'stdlib highlights', code: 'os, sys, json, re\nmath, random, datetime\npathlib, collections\nitertools, functools' },
+  ],
+  comprehensions: [
+    { title: 'List Comp', code: '[expr for item in iterable]\n[expr for item in iter if cond]\n\n[x*2 for x in range(5) if x%2==0]' },
+    { title: 'Dict Comp', code: '{k: v for k, v in pairs}\n\n{w: len(w) for w in words}' },
+    { title: 'Set Comp', code: '{expr for item in iterable}\n\n{x**2 for x in range(-5,6)}' },
+    { title: 'Generator', code: '(expr for item in iterable)\n\ntotal = sum(x**2 for x in range(1000))' },
+  ],
+};
+
+// State
+let state = {
+  topic: null,
+  mode: 'explain',
+  correct: 0,
+  total: 0,
+  currentMcqAnswer: null,
+  answered: false,
+};
+
+// Build topic buttons
+const grid = document.getElementById('topics-grid');
+TOPICS.forEach(t => {
+  const btn = document.createElement('button');
+  btn.className = 'topic-btn';
+  btn.dataset.id = t.id;
+  btn.innerHTML = `<span class="dot"></span>${t.icon} ${t.label}`;
+  btn.onclick = () => selectTopic(t.id);
+  grid.appendChild(btn);
+});
+
+// Mode buttons
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.mode = btn.dataset.mode;
+    resetCard();
+  };
+});
+
+function selectTopic(id) {
+  state.topic = id;
+  document.querySelectorAll('.topic-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.id === id);
+  });
+  resetCard();
+
+  if (state.mode === 'cheatsheet') {
+    showCheatsheet();
+  }
+}
+
+function resetCard() {
+  document.getElementById('question-area').innerHTML = `<p style="color:var(--muted);font-size:14px">Click <strong style="color:var(--accent)">Generate</strong> to begin${state.topic ? ' with <strong style="color:var(--accent2)">' + TOPICS.find(t=>t.id===state.topic)?.label + '</strong>' : ' — select a topic first'}.</p>`;
+  document.getElementById('options-area').style.display = 'none';
+  document.getElementById('answer-section').style.display = 'none';
+  document.getElementById('feedback').className = '';
+  document.getElementById('feedback').style.display = 'none';
+  document.getElementById('btn-submit').style.display = 'none';
+  document.getElementById('btn-next').style.display = 'none';
+  document.getElementById('btn-explain-more').style.display = 'none';
+  document.getElementById('explain-panel').classList.remove('visible');
+  document.getElementById('cheatsheet').classList.remove('visible');
+  document.getElementById('btn-go').style.display = 'inline-flex';
+  state.answered = false;
+  state.currentMcqAnswer = null;
+
+  if (state.mode === 'cheatsheet' && state.topic) {
+    showCheatsheet();
+    document.getElementById('btn-go').style.display = 'none';
+  }
+}
+
+function showCheatsheet() {
+  const data = CHEAT_SHEETS[state.topic];
+  if (!data) return;
+  const cg = document.getElementById('cheat-grid');
+  cg.innerHTML = data.map(item => `
+    <div class="cheat-card">
+      <h4>${item.title}</h4>
+      <pre>${item.code}</pre>
+    </div>
+  `).join('');
+  document.getElementById('cheatsheet').classList.add('visible');
+  document.getElementById('question-area').innerHTML = `<p style="color:var(--muted);font-size:14px">Quick reference for <strong style="color:var(--accent3)">${TOPICS.find(t=>t.id===state.topic)?.label}</strong>.</p>`;
+}
+
+function setLoading(msg = 'Thinking...') {
+  document.getElementById('question-area').innerHTML = `
+    <div class="loader">
+      <div class="loader-dots"><span></span><span></span><span></span></div>
+      ${msg}
+    </div>`;
+}
+
+function updateScore() {
+  document.getElementById('score-correct').textContent = state.correct;
+  document.getElementById('score-total').textContent = state.total;
+  const pct = state.total > 0 ? Math.round(state.correct / state.total * 100) + '%' : '—';
+  document.getElementById('score-pct').textContent = pct;
+  document.getElementById('progress-badge').textContent = `${state.correct} / ${state.total} correct`;
+}
+
+async function callClaude(prompt, systemPrompt = '') {
+  const messages = [{ role: 'user', content: prompt }];
+  const body = {
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 1000,
+    messages,
+  };
+  if (systemPrompt) body.system = systemPrompt;
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  return data.content?.[0]?.text || '';
+}
+
+async function handleGo() {
+  if (!state.topic) {
+    alert('Please select a topic first!');
+    return;
+  }
+  if (state.mode === 'cheatsheet') { showCheatsheet(); return; }
+
+  const topicLabel = TOPICS.find(t => t.id === state.topic)?.label;
+  document.getElementById('btn-go').style.display = 'none';
+  document.getElementById('options-area').style.display = 'none';
+  document.getElementById('answer-section').style.display = 'none';
+  document.getElementById('feedback').className = '';
+  document.getElementById('feedback').style.display = 'none';
+  document.getElementById('explain-panel').classList.remove('visible');
+  state.answered = false;
+
+  if (state.mode === 'explain') {
+    setLoading('Generating lesson...');
+    const text = await callClaude(
+      `Teach me about "${topicLabel}" in Python. Be concise but thorough. Include a practical code example. Use plain text only — no markdown headers or bold, just clean paragraphs and code in a <code> block using triple backticks. Keep total response under 350 words.`,
+      'You are a Python tutor. Respond in plain conversational text. Use code examples wrapped in triple backtick blocks. No markdown bold or headers.'
+    );
+    renderExplain(text, topicLabel);
+    document.getElementById('btn-next').style.display = 'inline-flex';
+    document.getElementById('btn-next').textContent = 'New Explanation →';
+    document.getElementById('btn-go').style.display = 'none';
+
+  } else if (state.mode === 'mcq') {
+    setLoading('Generating question...');
+    const raw = await callClaude(
+      `Generate a Python multiple-choice question about "${topicLabel}". 
+      Respond ONLY with valid JSON, no explanation, no markdown fences:
+      {
+        "question": "...",
+        "code": "...optional short code snippet or empty string...",
+        "options": ["A) ...", "B) ...", "C) ...", "D) ..."],
+        "correct": 0,
+        "explanation": "..."
+      }
+      correct is the 0-based index of the right answer.`,
+      'You are a Python quiz generator. Output ONLY raw JSON, nothing else.'
+    );
+    try {
+      const clean = raw.replace(/```json|```/g, '').trim();
+      const q = JSON.parse(clean);
+      renderMCQ(q);
+    } catch(e) {
+      document.getElementById('question-area').innerHTML = '<p style="color:var(--danger)">Failed to parse question. Try again.</p>';
+      document.getElementById('btn-go').style.display = 'inline-flex';
+    }
+
+  } else if (state.mode === 'freeform') {
+    setLoading('Generating exercise...');
+    const raw = await callClaude(
+      `Generate a short Python coding exercise about "${topicLabel}".
+      Respond ONLY with valid JSON:
+      {
+        "prompt": "...(the exercise instructions)...",
+        "example_solution": "...short correct python code...",
+        "key_concepts": ["concept1", "concept2"]
+      }`,
+      'You are a Python exercise generator. Output ONLY raw JSON, nothing else.'
+    );
+    try {
+      const clean = raw.replace(/```json|```/g, '').trim();
+      const ex = JSON.parse(clean);
+      renderFreeform(ex);
+    } catch(e) {
+      document.getElementById('question-area').innerHTML = '<p style="color:var(--danger)">Failed to generate exercise. Try again.</p>';
+      document.getElementById('btn-go').style.display = 'inline-flex';
+    }
+  }
+}
+
+function renderExplain(text, topicLabel) {
+  document.getElementById('card-filename').textContent = `${state.topic}_lesson.py`;
+  let html = `<h3>${topicLabel}</h3>`;
+  // Parse code blocks
+  const parts = text.split(/```(?:python)?/);
+  parts.forEach((part, i) => {
+    if (i % 2 === 0) {
+      html += `<p style="color:var(--text);font-size:14px;line-height:1.75;margin-bottom:12px">${part.replace(/\n/g,'<br>')}</p>`;
+    } else {
+      html += `<div class="code-block">${escHtml(part.trim())}</div>`;
+    }
+  });
+  document.getElementById('question-area').innerHTML = html;
+  document.getElementById('btn-explain-more').style.display = 'inline-flex';
+}
+
+function renderMCQ(q) {
+  document.getElementById('card-filename').textContent = `quiz_${state.topic}.py`;
+  let html = `<h3>${q.question}</h3>`;
+  if (q.code && q.code.trim()) {
+    html += `<div class="code-block">${escHtml(q.code)}</div>`;
+  }
+  document.getElementById('question-area').innerHTML = html;
+
+  const area = document.getElementById('options-area');
+  area.style.display = 'flex';
+  area.innerHTML = '';
+  const labels = ['A','B','C','D'];
+  q.options.forEach((opt, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'option-btn';
+    btn.innerHTML = `<span class="opt-label">${labels[i]}</span>${opt.replace(/^[A-D]\)\s*/,'')}`;
+    btn.onclick = () => {
+      if (state.answered) return;
+      state.answered = true;
+      state.total++;
+      const correct = i === q.correct;
+      if (correct) state.correct++;
+      updateScore();
+
+      document.querySelectorAll('.option-btn').forEach((b, j) => {
+        b.disabled = true;
+        if (j === q.correct) b.classList.add('correct');
+        if (j === i && !correct) b.classList.add('wrong');
+      });
+
+      const fb = document.getElementById('feedback');
+      if (correct) {
+        fb.className = 'success';
+        fb.innerHTML = `<strong>✓ Correct!</strong>${q.explanation}`;
+      } else {
+        fb.className = 'error';
+        fb.innerHTML = `<strong>✗ Not quite.</strong>${q.explanation}`;
+      }
+      fb.style.display = 'block';
+      document.getElementById('btn-next').style.display = 'inline-flex';
+      document.getElementById('btn-next').textContent = 'Next Question →';
+    };
+    area.appendChild(btn);
+  });
+}
+
+function renderFreeform(ex) {
+  document.getElementById('card-filename').textContent = `exercise_${state.topic}.py`;
+  let html = `<h3>Exercise</h3><p style="font-size:14px;line-height:1.7;color:var(--text)">${ex.prompt}</p>`;
+  if (ex.key_concepts?.length) {
+    html += `<p style="margin-top:12px;font-size:12px;color:var(--muted)">Key concepts: <span style="color:var(--accent)">${ex.key_concepts.join(', ')}</span></p>`;
+  }
+  document.getElementById('question-area').innerHTML = html;
+  document.getElementById('answer-section').style.display = 'block';
+  document.getElementById('answer-input').value = '';
+  document.getElementById('btn-submit').style.display = 'inline-flex';
+
+  // Store solution
+  document.getElementById('btn-submit').dataset.solution = ex.example_solution;
+}
+
+async function handleSubmit() {
+  const answer = document.getElementById('answer-input').value.trim();
+  if (!answer) { alert('Write something first!'); return; }
+
+  const solution = document.getElementById('btn-submit').dataset.solution;
+  const topicLabel = TOPICS.find(t => t.id === state.topic)?.label;
+
+  document.getElementById('btn-submit').textContent = 'Checking...';
+  document.getElementById('btn-submit').disabled = true;
+
+  const feedback = await callClaude(
+    `A student is learning about "${topicLabel}" in Python.
+
+Exercise goal: Help them practice ${topicLabel}.
+Student's code:
+\`\`\`python
+${answer}
+\`\`\`
+
+Reference solution:
+\`\`\`python
+${solution}
+\`\`\`
+
+Evaluate their attempt. Be encouraging. Note what's correct, what's missing, and give a 1-sentence tip. Keep it under 100 words. Start with either "✓ Good work!" or "✗ Not quite—" based on correctness. Include a correctness verdict as JSON at end: {"correct": true/false}`,
+    'You are a supportive Python tutor giving brief, constructive feedback. Always end with a JSON verdict.'
+  );
+
+  // Parse verdict
+  const verdictMatch = feedback.match(/\{"correct":\s*(true|false)\}/);
+  const isCorrect = verdictMatch?.[1] === 'true';
+  state.total++;
+  if (isCorrect) state.correct++;
+  updateScore();
+
+  const cleanFeedback = feedback.replace(/\{"correct":\s*(true|false)\}/, '').trim();
+
+  const fb = document.getElementById('feedback');
+  fb.className = isCorrect ? 'success' : 'info';
+  fb.innerHTML = `<strong>${isCorrect ? '✓ Correct' : '📝 Feedback'}</strong>${cleanFeedback}`;
+  fb.style.display = 'block';
+
+  document.getElementById('btn-submit').style.display = 'none';
+  document.getElementById('btn-next').style.display = 'inline-flex';
+  document.getElementById('btn-next').textContent = 'Next Exercise →';
+}
+
+function handleNext() {
+  resetCard();
+  handleGo();
+}
+
+async function explainMore() {
+  const topicLabel = TOPICS.find(t => t.id === state.topic)?.label;
+  const panel = document.getElementById('explain-panel');
+  const content = document.getElementById('explain-content');
+  panel.classList.add('visible');
+  content.innerHTML = `<div class="loader"><div class="loader-dots"><span></span><span></span><span></span></div>Generating deeper explanation...</div>`;
+
+  const text = await callClaude(
+    `Give me a deeper explanation of "${topicLabel}" in Python. Cover edge cases, common mistakes, and a real-world use case. Under 300 words. Use code blocks with triple backticks for code examples.`,
+    'You are a Python expert. Use clear prose and code examples in triple backtick blocks. No markdown headers.'
+  );
+
+  let html = '';
+  const parts = text.split(/```(?:python)?/);
+  parts.forEach((part, i) => {
+    if (i % 2 === 0) {
+      html += `<p style="margin-bottom:12px">${part.replace(/\n/g,'<br>')}</p>`;
+    } else {
+      html += `<div class="code-block">${escHtml(part.trim())}</div>`;
+    }
+  });
+  content.innerHTML = html;
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>
