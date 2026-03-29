@@ -20,23 +20,52 @@ skills/state/SKILL.md
 skills/verify/SKILL.md
 skills/work/SKILL.md
 #
-# 30 free categorized skills
+# 60 categorized skills (all unlocked)
+#
+# Automation (5)
 skills/automation/api-integration/SKILL.md
 skills/automation/content-pipeline/SKILL.md
 skills/automation/cron-scheduler/SKILL.md
 skills/automation/n8n-workflow-builder/SKILL.md
 skills/automation/webhook-designer/SKILL.md
+#
+# Business (7)
 skills/business/client-onboarding/SKILL.md
 skills/business/contract-template/SKILL.md
 skills/business/financial-model/SKILL.md
 skills/business/invoice-generator/SKILL.md
+skills/business/proposal-writer/SKILL.md
+skills/business/scope-of-work/SKILL.md
+skills/business/sop-builder/SKILL.md
+#
+# Content (8)
+skills/content/blog-post/SKILL.md
+skills/content/email-sequence/SKILL.md
+skills/content/landing-page-copy/SKILL.md
 skills/content/newsletter/SKILL.md
 skills/content/product-description/SKILL.md
 skills/content/tiktok-script/SKILL.md
 skills/content/twitter-thread/SKILL.md
+skills/content/youtube-script/SKILL.md
+#
+# Deployment (6)
+skills/deployment/ci-cd-pipeline/SKILL.md
+skills/deployment/docker-setup/SKILL.md
+skills/deployment/domain-ssl/SKILL.md
+skills/deployment/hetzner-setup/SKILL.md
+skills/deployment/netlify-deploy/SKILL.md
+skills/deployment/railway-deploy/SKILL.md
+#
+# Development (7)
+skills/development/api-designer/SKILL.md
+skills/development/code-reviewer/SKILL.md
+skills/development/database-architect/SKILL.md
 skills/development/migration-planner/SKILL.md
+skills/development/performance-audit/SKILL.md
 skills/development/refactor-planner/SKILL.md
 skills/development/test-writer/SKILL.md
+#
+# Marketing (8)
 skills/marketing/competitor-analysis/SKILL.md
 skills/marketing/facebook-ad/SKILL.md
 skills/marketing/google-ad/SKILL.md
@@ -45,9 +74,28 @@ skills/marketing/lead-magnet/SKILL.md
 skills/marketing/pricing-strategy/SKILL.md
 skills/marketing/sales-funnel/SKILL.md
 skills/marketing/webinar-script/SKILL.md
+#
+# Product (6)
 skills/product/feature-spec/SKILL.md
 skills/product/feedback-analyzer/SKILL.md
 skills/product/mvp-scoper/SKILL.md
 skills/product/prd-writer/SKILL.md
 skills/product/roadmap-builder/SKILL.md
 skills/product/user-story-generator/SKILL.md
+#
+# Security (7)
+skills/security/api-audit/SKILL.md
+skills/security/csp-headers/SKILL.md
+skills/security/dependency-audit/SKILL.md
+skills/security/owasp-top10/SKILL.md
+skills/security/rls-checker/SKILL.md
+skills/security/rls-guardian/SKILL.md
+skills/security/secrets-scanner/SKILL.md
+#
+# SEO & GEO (6)
+skills/seo-geo/ai-search-visibility/SKILL.md
+skills/seo-geo/keyword-research/SKILL.md
+skills/seo-geo/local-seo/SKILL.md
+skills/seo-geo/meta-tag-optimizer/SKILL.md
+skills/seo-geo/schema-markup/SKILL.md
+skills/seo-geo/site-audit/SKILL.md
