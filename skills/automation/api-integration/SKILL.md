@@ -1,335 +1,191 @@
 ---
 name: api-integration
-description: "Use when the user says 'API integration', 'connect APIs', 'sync data', 'API to API', 'integrate with', or needs to build a reliable connection between two systems via their APIs."
+description: "Design reliable system-to-system API integrations with auth, rate limiting, data mapping, error recovery, and sync monitoring. Use when: 'API integration', 'connect APIs', 'sync data', 'API to API', 'integrate with', or connecting two systems via APIs. Do NOT use for visual n8n workflows (n8n-workflow-builder), receiving webhooks only (webhook-designer), or cron scheduling where integration is secondary (cron-scheduler)."
 ---
 
-
-# 🔗 API Integration — System-to-System Connector
-*Design reliable API integrations with authentication, rate limiting, data mapping, error recovery, and sync monitoring.*
+# API Integration
 
 ## Activation
 
-When this skill activates, output:
-
-`🔗 API Integration — Designing your system integration...`
-
 | Context | Status |
 |---------|--------|
-| **User says "API integration", "connect APIs", "sync data"** | ACTIVE |
-| **User wants to move data between two systems** | ACTIVE |
-| **User mentions OAuth, rate limits, or data mapping** | ACTIVE |
-| **User wants a visual n8n workflow** | DORMANT — see n8n-workflow-builder |
-| **User wants to receive webhooks (not build a full integration)** | DORMANT — see webhook-designer |
-| **User wants a cron job (the integration is secondary)** | DORMANT — see cron-scheduler |
+| "API integration", "connect APIs", "sync data", moving data between systems | ACTIVE |
+| OAuth, rate limits, or data mapping as part of integration work | ACTIVE |
+| Visual n8n workflow | DORMANT -- n8n-workflow-builder |
+| Receiving webhooks only (no full integration) | DORMANT -- webhook-designer |
+| Cron job where integration is secondary | DORMANT -- cron-scheduler |
 
-## Protocol
+## Instructions
 
-### Step 1: Gather Inputs
+### Step 1: Gather Integration Requirements
 
-Ask the user for:
-- **Source API**: What system provides the data? (name, docs URL)
-- **Target system**: Where should data go? (database, another API, file)
-- **Data to sync**: What specific data? (users, orders, products, events)
-- **Sync frequency**: Real-time, near-real-time, hourly, daily, on-demand?
-- **Volume**: How many records? How often do they change?
-- **Direction**: One-way (source → target) or bidirectional?
+Collect before designing anything:
 
-### Step 2: Choose Integration Pattern
+- **Source API** -- name, docs URL, auth method
+- **Target system** -- another API, database, or file store
+- **Data scope** -- which entities/fields to sync
+- **Sync frequency** -- real-time, near-real-time, hourly, daily, on-demand
+- **Volume** -- record count, change velocity
+- **Direction** -- one-way or bidirectional (bidirectional requires change tokens to prevent sync loops)
 
-Evaluate which pattern fits:
+> Gate: Do not proceed without source API auth method and target system confirmed.
 
-| Pattern | Best For | Latency | Complexity | Cost |
-|---------|----------|---------|------------|------|
-| **Polling** | APIs without webhooks, batch sync | Minutes-hours | Low | Higher API calls |
-| **Webhook** | Event-driven, real-time updates | Seconds | Medium | Low API calls |
-| **Event-driven** | High-volume, microservice comms | Milliseconds | High | Infra cost (queue) |
-| **Hybrid** | Webhook for real-time + polling for reconciliation | Seconds + batch | Medium-High | Balanced |
+### Step 2: Select Integration Pattern
 
-**Decision guide:**
-- Source has webhooks? → Webhook-first, poll for reconciliation
-- Source has no webhooks? → Poll at reasonable interval
-- Need real-time? → Webhook or event stream
-- Need guaranteed delivery? → Add queue (SQS, Redis, BullMQ)
-- Bidirectional? → Be very careful about sync loops — use change tokens
+| Pattern | When | Trade-off |
+|---------|------|-----------|
+| Polling | Source lacks webhooks, batch-tolerant | Simple but higher API call cost |
+| Webhook | Source supports them, real-time needed | Low cost but requires endpoint hosting |
+| Event-driven | High-volume, microservice comms | Lowest latency but requires queue infra (SQS/Redis/BullMQ) |
+| Hybrid | Webhook primary + polling reconciliation | Best reliability, highest complexity |
 
-Recommend the pattern with justification.
+Decision rules:
+- Source has webhooks? Webhook-first, poll for reconciliation catch-up.
+- Source has no webhooks? Poll at the smallest interval the rate limit allows.
+- Need guaranteed delivery? Add a persistent queue between receive and process.
+- Bidirectional? Mandatory: change tokens or last-modified timestamps to break sync loops.
+
+> Gate: Confirm pattern choice and justify before proceeding to auth.
 
 ### Step 3: Authentication Setup
 
-Provide setup for the source API's auth method:
+Choose based on what the source API requires:
 
-**API Key:**
-```javascript
-const client = axios.create({
-  baseURL: 'https://api.service.com/v1',
-  headers: { 'Authorization': `Bearer ${process.env.SERVICE_API_KEY}` },
-  timeout: 10000,
-});
-```
+| Method | When | Key Concern |
+|--------|------|-------------|
+| API Key / Bearer token | Simple APIs, server-to-server | Store in env vars, rotate on schedule |
+| OAuth 2.0 (client_credentials) | SaaS APIs (Salesforce, HubSpot, etc.) | Cache token until `expires_in - 60s`, refresh proactively |
+| OAuth 2.0 (authorization_code) | User-context APIs | Requires initial consent flow + refresh token storage |
+| JWT (self-signed) | Google APIs, service accounts | Sign with RS256, expire at 1h max |
 
-**OAuth 2.0:**
-```javascript
-class OAuthClient {
-  constructor(clientId, clientSecret, tokenUrl) {
-    this.clientId = clientId;
-    this.clientSecret = clientSecret;
-    this.tokenUrl = tokenUrl;
-    this.accessToken = null;
-    this.expiresAt = 0;
-  }
+Rules:
+- Never hardcode credentials. Environment variables or secret manager only.
+- Document required scopes/permissions explicitly.
+- OAuth token refresh must be transparent to calling code -- wrap in a client that auto-refreshes.
+- On 401 response: refresh token once, retry once, then fail loudly.
 
-  async getToken() {
-    if (this.accessToken && Date.now() < this.expiresAt - 60000) {
-      return this.accessToken;
-    }
+> Gate: Auth method selected and credentials sourced before writing integration code.
 
-    const response = await axios.post(this.tokenUrl, {
-      grant_type: 'client_credentials',
-      client_id: this.clientId,
-      client_secret: this.clientSecret,
-    });
+### Step 4: Rate Limit Strategy
 
-    this.accessToken = response.data.access_token;
-    this.expiresAt = Date.now() + (response.data.expires_in * 1000);
-    return this.accessToken;
-  }
+Two layers, always both:
 
-  async request(config) {
-    const token = await this.getToken();
-    return axios({ ...config, headers: { ...config.headers, Authorization: `Bearer ${token}` } });
-  }
-}
-```
+1. **Pre-emptive** -- Track calls per window, insert delays to stay under limit. Use token bucket or simple interval math (`1000ms / maxPerSecond`).
+2. **Reactive** -- Catch HTTP 429, read `Retry-After` header (default 60s if missing), wait, retry once.
 
-**JWT:**
-```javascript
-const jwt = require('jsonwebtoken');
-const token = jwt.sign({ sub: serviceId }, privateKey, {
-  algorithm: 'RS256',
-  expiresIn: '1h',
-});
-```
+Additional strategies by volume:
+- **Batch endpoints** -- Prefer bulk APIs (e.g., 100 items/call) over individual calls.
+- **Job queue** -- BullMQ or similar with concurrency set to stay within rate limits.
+- **Cursor pagination** -- Never re-fetch pages; store cursor for resume.
 
-Store all credentials in environment variables. Document which scopes/permissions are needed.
+Document the source API's limits in a table: endpoint, limit, window, notes.
 
-### Step 4: Rate Limit Handling
+> Gate: Rate limits documented and handling strategy confirmed before data mapping.
 
-Design rate limit respect:
+### Step 5: Data Mapping and Transformation
 
-```javascript
-class RateLimitedClient {
-  constructor(client, maxPerSecond = 10) {
-    this.client = client;
-    this.queue = [];
-    this.interval = 1000 / maxPerSecond;
-    this.lastRequest = 0;
-  }
+Define every field mapping as: `source.field -> target.field` with transform rule.
 
-  async request(config) {
-    const now = Date.now();
-    const wait = Math.max(0, this.lastRequest + this.interval - now);
+Transform patterns to specify:
+- Type coercion (string to number, cents to dollars)
+- Enum mapping (source status values to target status values)
+- Normalization (`.toLowerCase().trim()` on emails)
+- Concatenation (address line1 + line2)
+- Date format conversion (ISO to YYYY-MM-DD or epoch)
+- Constants (sync_source, last_synced_at injected by integration)
+- Null handling (default values, skip vs error on missing required fields)
 
-    if (wait > 0) await new Promise(r => setTimeout(r, wait));
-    this.lastRequest = Date.now();
+Rules:
+- Always add `external_id` (source system ID) and `last_synced_at` to target records.
+- Validate mapped records before writing -- reject malformed, continue processing rest.
+- Log every skipped record with source ID and reason.
 
-    try {
-      return await this.client.request(config);
-    } catch (err) {
-      if (err.response?.status === 429) {
-        const retryAfter = parseInt(err.response.headers['retry-after'] || '60', 10);
-        console.warn(`Rate limited. Retrying after ${retryAfter}s`);
-        await new Promise(r => setTimeout(r, retryAfter * 1000));
-        return this.request(config); // Retry once
-      }
-      throw err;
-    }
-  }
-}
-```
+### Step 6: Error Handling and Recovery
 
-**Rate limit strategies:**
-- **Pre-emptive**: Track calls, delay to stay under limit
-- **Reactive**: Catch 429s, respect `Retry-After` header
-- **Batch**: Group multiple operations into single API calls where supported
-- **Queue**: Use a job queue (BullMQ) to process at controlled rate
+Map every failure mode to a recovery action:
 
-Document the source API's rate limits:
-| Endpoint | Limit | Window | Notes |
-|----------|-------|--------|-------|
-| `GET /items` | 100/min | Rolling | Use pagination cursor |
-| `POST /items` | 20/min | Rolling | Batch endpoint: 100 items/call |
-| Global | 1000/hr | Fixed | Across all endpoints |
+| Failure | Detection | Recovery |
+|---------|-----------|----------|
+| Source API down | Timeout / 5xx | Retry 3x with exponential backoff (1s, 4s, 16s), skip cycle + alert |
+| Bad source data | Validation failure | Log + skip record, process remaining batch |
+| Target write failure | Insert/update error | Retry 3x, then dead-letter queue for manual review |
+| Partial sync (crash mid-batch) | Missing checkpoint update | Resume from last stored cursor, never restart from zero |
+| Rate limit | 429 | Backoff per Step 4, resume from current position |
+| Auth expired | 401 | Refresh token, retry request once |
 
-### Step 5: Data Mapping
+Idempotency rules:
+- Every write must be idempotent. Use upsert (ON CONFLICT UPDATE) keyed on `external_id`.
+- Store sync cursor/checkpoint before processing each batch page, not after.
+- For multi-step operations: log completed steps, resume from last incomplete step.
 
-Define how source fields transform to target fields:
+Retry backoff formula: `delay = baseDelay * (2 ^ attempt)` with jitter. Max 3 retries for transient errors. Never retry 4xx (except 429 and 401).
 
-```
-── DATA MAPPING ───────────────────────────
+### Step 7: Monitoring and Sync Tracking
 
-Source: [API Name]         Target: [System Name]
-─────────────────────────────────────────────
-source.id               →  external_id         String, direct
-source.email             →  email               String, .toLowerCase().trim()
-source.created_at        →  created_date        Date, parse ISO → YYYY-MM-DD
-source.amount_cents      →  amount              Number, / 100
-source.status            →  status              Enum map: { active: 'enabled', inactive: 'disabled' }
-source.metadata.tags     →  tags                Array, .join(', ')
-source.address.line1     →  street_address      String, concat line1 + line2
-[not in source]          →  sync_source         Constant: 'api_name'
-[not in source]          →  last_synced_at      Timestamp: NOW()
-```
+Track in a `sync_status` table: integration name, last sync timestamp, status (success/partial/failed), records synced/failed, last cursor, error message, duration.
 
-**Mapping implementation:**
-```javascript
-function mapRecord(source) {
-  return {
-    external_id: source.id,
-    email: source.email?.toLowerCase().trim(),
-    created_date: source.created_at?.split('T')[0],
-    amount: source.amount_cents / 100,
-    status: { active: 'enabled', inactive: 'disabled' }[source.status] || 'unknown',
-    tags: source.metadata?.tags?.join(', ') || '',
-    street_address: [source.address?.line1, source.address?.line2].filter(Boolean).join(' '),
-    sync_source: 'api_name',
-    last_synced_at: new Date().toISOString(),
-  };
-}
-```
+Alert thresholds:
+- No successful sync in 2x the expected interval
+- Error rate exceeds 5% of records
+- Sync duration exceeds 3x historical average
 
-### Step 6: Error Handling
+Expose a health check endpoint or dashboard: status, last sync time, record counts, data freshness, next scheduled sync.
 
-Design error recovery for each failure mode:
+### Step 8: Deliver Specification
 
-| Failure | Detection | Recovery | Data Impact |
-|---------|-----------|----------|-------------|
-| **Source API down** | Connection timeout / 5xx | Retry 3x, then skip cycle + alert | No data loss — retry next cycle |
-| **Bad data from source** | Validation failure | Log + skip record, process rest | One record skipped |
-| **Target write fails** | Insert/update error | Retry record 3x, then dead-letter | Record queued for manual fix |
-| **Partial sync** | Crash mid-batch | Resume from last cursor/checkpoint | Already-synced records safe |
-| **Rate limit hit** | 429 response | Backoff, resume from where stopped | No data loss |
-| **Auth expired** | 401 response | Refresh token, retry request | No data loss |
+Output the complete integration spec covering: pattern, auth, rate limits, data mapping, error handling, caching decisions, and monitoring -- all in one document.
 
-**Compensating transactions:**
-If a multi-step sync fails partway through:
-1. Log what was successfully synced
-2. Store the sync cursor/position
-3. On next run, detect partial sync and resume (not restart)
-4. For reversible operations, consider rollback on failure
+Cache decisions: cache lookup tables (1h TTL), cache auth tokens (until expiry - 60s), cache pagination cursors (duration of sync), never cache transactional data.
 
-### Step 7: Caching
+## Examples
 
-When and what to cache:
+**Stripe to Supabase order sync:**
+Polling pattern (Stripe has webhooks but polling for reconciliation). OAuth not needed -- API key auth. Map `amount` cents-to-dollars, `status` enum to internal values. Upsert on `stripe_order_id`. Poll every 5 min with `created[gte]` filter.
 
-| Data | Cache? | TTL | Reason |
-|------|--------|-----|--------|
-| Lookup tables (categories, types) | Yes | 1 hour | Rarely changes, called often |
-| User profiles | Yes | 5 min | Moderate change rate |
-| Transaction data | No | — | Must be real-time accurate |
-| API tokens | Yes | Until expiry - 60s | Avoid unnecessary auth calls |
-| Pagination cursors | Yes | Duration of sync | Resume interrupted syncs |
+**HubSpot bidirectional contact sync:**
+Hybrid pattern -- HubSpot webhooks for real-time + hourly polling reconciliation. OAuth 2.0 client_credentials. Change tokens (`hs_lastmodifieddate`) to prevent sync loops. Dead-letter queue for contacts failing validation. Batch API for bulk reads (100/request).
 
-**Cache implementation:**
-```javascript
-const cache = new Map();
+## Common Issues
 
-async function cachedGet(key, fetchFn, ttlMs = 300000) {
-  const cached = cache.get(key);
-  if (cached && Date.now() < cached.expiresAt) return cached.data;
+| Issue | Fix |
+|-------|-----|
+| Sync loop in bidirectional integration | Use change tokens or `updated_by` field to skip changes made by the integration itself |
+| OAuth token expires mid-sync | Cache token with 60s buffer before expiry; auto-refresh transparently in HTTP client wrapper |
+| Partial sync leaves orphaned records | Always store cursor checkpoint before processing; resume from last checkpoint, never restart |
 
-  const data = await fetchFn();
-  cache.set(key, { data, expiresAt: Date.now() + ttlMs });
-  return data;
-}
-```
+## Anti-Patterns
 
-### Step 8: Monitoring
+- **Retry without backoff** -- Hammering a failing API guarantees rate limiting on top of the original failure.
+- **Restart instead of resume** -- Re-syncing from the beginning on failure wastes API calls and risks duplicates.
+- **Ignoring idempotency** -- Every target write must be an upsert keyed on `external_id`; INSERT-only creates duplicates on retry.
+- **Caching transactional data** -- Orders, payments, inventory must always be fetched fresh; stale cache causes data integrity bugs.
+- **Bidirectional without change tokens** -- Guaranteed infinite sync loop.
 
-**Sync status tracking:**
+## Escalation
 
-```sql
-CREATE TABLE sync_status (
-  id SERIAL PRIMARY KEY,
-  integration_name VARCHAR(100) NOT NULL,
-  last_sync_at TIMESTAMPTZ,
-  last_sync_status VARCHAR(20), -- success, partial, failed
-  records_synced INTEGER DEFAULT 0,
-  records_failed INTEGER DEFAULT 0,
-  last_cursor TEXT, -- for pagination resume
-  error_message TEXT,
-  sync_duration_ms INTEGER
-);
-```
-
-**Metrics to track:**
-- Sync frequency: Is it running on schedule?
-- Data freshness: When was the last successful sync?
-- Error rate: What % of records fail?
-- Throughput: Records per second
-- Latency: Time from source change to target update
-
-**Dashboard output:**
-```
-Integration: [name]
-Status: ✅ Healthy | ⚠️ Degraded | ❌ Failed
-Last sync: [timestamp] ([X minutes ago])
-Records: [synced] synced, [failed] failed
-Data freshness: [X minutes]
-Next sync: [timestamp]
-```
-
-### Step 9: Output
-
-Present the complete integration specification:
-
-```
-━━━ API INTEGRATION: [Source] → [Target] ━━
-
-── PATTERN ────────────────────────────────
-Type: [polling/webhook/event-driven/hybrid]
-Frequency: [schedule]
-Direction: [one-way/bidirectional]
-
-── AUTHENTICATION ─────────────────────────
-Source: [auth method + setup]
-Target: [auth method + setup]
-
-── RATE LIMITS ────────────────────────────
-[limit table + handling strategy]
-
-── DATA MAPPING ───────────────────────────
-[field mapping table + transform code]
-
-── ERROR HANDLING ─────────────────────────
-[failure matrix with recovery strategies]
-
-── CACHING ────────────────────────────────
-[what to cache + TTLs]
-
-── MONITORING ─────────────────────────────
-[sync_status table + metrics + dashboard]
-
-── CODE ───────────────────────────────────
-[complete integration implementation]
-```
+- Source API has no pagination and returns unbounded result sets -- flag as architectural risk, recommend negotiating API changes or implementing client-side windowing by date range.
+- Source API has no idempotency keys and no upsert support -- require manual dedup strategy before proceeding.
+- Rate limits too low for data volume -- calculate if sync can complete within the window; if not, escalate to user for batch API access or higher tier.
 
 ## Inputs
-- Source API (name, docs, auth method)
-- Target system (database, API, file)
-- Data to sync (entities, fields)
-- Sync frequency and direction
-- Volume estimates
+
+- Source API: name, docs URL, auth method, rate limits
+- Target system: type (API/DB/file), auth, write method
+- Data scope: entities, fields, volume, change velocity
+- Sync requirements: frequency, direction, latency tolerance
 
 ## Outputs
+
 - Integration pattern recommendation with justification
-- Authentication setup (API key, OAuth 2.0, JWT)
-- Rate limit handling with pre-emptive and reactive strategies
-- Data mapping table with transformation functions
+- Auth setup specification (method, scopes, refresh strategy)
+- Rate limit handling strategy (pre-emptive + reactive)
+- Field mapping table with transform rules
 - Error handling matrix with recovery per failure type
-- Caching strategy with TTLs
-- Monitoring dashboard with sync status table and metrics
-- Complete integration code
+- Caching decisions with TTLs
+- Monitoring spec: sync_status schema, alert thresholds, health check
+- Complete integration specification document
 
 ## Level History
 
-- **Lv.1** — Base: Integration pattern selection (polling/webhook/event-driven/hybrid), auth setup (API key, OAuth 2.0, JWT), rate limit handling (pre-emptive + reactive + queue), data mapping with transforms, error recovery matrix with compensating transactions, caching strategy, sync status monitoring with freshness tracking. (Origin: MemStack v3.2, Mar 2026)
+- **Lv.1** -- Base: Integration pattern selection (polling/webhook/event-driven/hybrid), auth setup (API key, OAuth 2.0, JWT), rate limit handling (pre-emptive + reactive + queue), data mapping with transforms, error recovery matrix with compensating transactions, caching strategy, sync status monitoring with freshness tracking. (Origin: MemStack v3.2, Mar 2026)
+- **Lv.2** -- Compressed: Rewritten to creator-level density. Removed tutorial code and full implementation examples. Added validation gates between steps, anti-patterns, escalation triggers, idempotency rules, retry backoff formula, bidirectional sync loop prevention, and alert thresholds. (Origin: MemStack v3.3, Mar 2026)

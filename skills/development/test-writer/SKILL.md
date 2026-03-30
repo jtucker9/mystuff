@@ -1,422 +1,132 @@
 ---
 name: test-writer
-description: "Use when the user says 'write tests', 'add tests', 'test coverage', 'unit tests', 'integration tests', or wants to generate test files for existing code."
+description: "Generate unit, integration, and component tests with proper mocking and edge case coverage. Activate on 'write tests', 'add tests', 'test coverage', 'unit tests', 'integration tests'. Do NOT use for refactoring plans (see refactor-planner) or code review (see code-reviewer)."
 ---
 
-# 🧪 Test Writer — Comprehensive Test Generation
-*Analyze code for untested paths and generate unit, integration, and component tests with proper mocking and edge case coverage.*
+# Test Writer
 
 ## Activation
 
-When this skill activates, output:
-
-`🧪 Test Writer — Generating tests for your codebase...`
-
 | Context | Status |
 |---------|--------|
-| **User says "write tests", "add tests", "test coverage"** | ACTIVE |
-| **User wants unit, integration, or component tests** | ACTIVE |
-| **User mentions mocking, edge cases, or test strategy** | ACTIVE |
-| **User wants to plan a refactor (tests are part of it)** | DORMANT — see refactor-planner |
-| **User wants to plan a database migration** | DORMANT — see migration-planner |
+| "write tests", "add tests", "test coverage", "unit tests" | ACTIVE |
+| Mocking strategy, edge case identification, test structure | ACTIVE |
+| Refactoring plan that includes tests | DORMANT — refactor-planner |
+| Code quality review | DORMANT — code-reviewer |
 
-## Protocol
+## Instructions
 
 ### Step 1: Gather Inputs
 
-Ask the user for:
-- **Target code**: Which files, modules, or features need tests?
-- **Language/framework**: What's the tech stack? (Node/Jest, Python/pytest, React/Vitest, etc.)
-- **Test runner**: What test framework is already configured?
-- **Existing tests**: Are there any tests already? What's the coverage?
-- **Priority areas**: What's most critical to test? (business logic, API routes, UI components)
-- **External dependencies**: What needs mocking? (databases, APIs, file system)
-
-### Step 2: Analyze Critical Paths
-
-Identify the most important code paths to test:
-
-| Priority | Code Path | Type | Risk | Coverage |
-|----------|-----------|------|------|----------|
-| 🔴 Critical | [business logic / payment flow / auth] | Unit | High — bugs here lose money | None |
-| 🟡 Important | [API routes / data transforms] | Integration | Medium — breaks user flows | Partial |
-| 🟢 Standard | [utility functions / helpers] | Unit | Low — isolated, simple | None |
-| 🟢 Standard | [UI components / forms] | Component | Medium — user-facing | None |
-
-**Critical path detection rules:**
-- Handles money or sensitive data → 🔴 Critical
-- Called by 5+ other modules → 🔴 Critical
-- Has complex branching (3+ conditions) → 🟡 Important
-- Pure function with clear inputs/outputs → 🟢 Standard (but easy to test)
-- Recently had bugs → 🔴 Critical regardless of type
-
-### Step 3: Generate Unit Tests
-
-For utility functions and business logic:
-
-**Test structure:**
-```javascript
-describe('[ModuleName]', () => {
-  describe('[functionName]', () => {
-    // Happy path
-    it('should [expected behavior] when [condition]', () => {
-      const result = functionName(validInput);
-      expect(result).toEqual(expectedOutput);
-    });
-
-    // Edge cases
-    it('should handle null input gracefully', () => {
-      expect(() => functionName(null)).not.toThrow();
-    });
-
-    it('should return empty array when given empty input', () => {
-      const result = functionName([]);
-      expect(result).toEqual([]);
-    });
-
-    // Boundary values
-    it('should handle maximum allowed value', () => {
-      const result = functionName(MAX_VALUE);
-      expect(result).toBeDefined();
-    });
-
-    it('should handle minimum allowed value', () => {
-      const result = functionName(MIN_VALUE);
-      expect(result).toBeDefined();
-    });
-
-    // Error states
-    it('should throw ValidationError for invalid input', () => {
-      expect(() => functionName(invalidInput)).toThrow(ValidationError);
-    });
-  });
-});
-```
-
-**Test naming convention:**
-- `describe` block: Module or class name
-- Nested `describe`: Function or method name
-- `it` block: `should [behavior] when [condition]`
-- Never use `test` as a verb in descriptions
-
-**Coverage targets per function type:**
-| Function Type | Min Coverage | Key Cases |
-|---------------|-------------|-----------|
-| Pure functions | 100% | All branches, boundary values |
-| Business logic | 90% | Happy path, every error branch |
-| Data transforms | 95% | Null, empty, malformed, large |
-| Validators | 100% | Valid, each invalid case |
-
-### Step 4: Generate Integration Tests
-
-For API routes and service interactions:
-
-```javascript
-describe('[Route/Service] Integration', () => {
-  // Setup
-  beforeAll(async () => {
-    await setupTestDatabase();
-  });
-
-  afterEach(async () => {
-    await cleanupTestData();
-  });
-
-  afterAll(async () => {
-    await teardownTestDatabase();
-  });
-
-  describe('POST /api/[resource]', () => {
-    it('should create resource and return 201', async () => {
-      const response = await request(app)
-        .post('/api/resource')
-        .send(validPayload)
-        .set('Authorization', `Bearer ${testToken}`);
-
-      expect(response.status).toBe(201);
-      expect(response.body).toMatchObject({
-        id: expect.any(String),
-        ...validPayload,
-      });
-    });
-
-    it('should return 400 for invalid payload', async () => {
-      const response = await request(app)
-        .post('/api/resource')
-        .send(invalidPayload)
-        .set('Authorization', `Bearer ${testToken}`);
-
-      expect(response.status).toBe(400);
-      expect(response.body.error).toBeDefined();
-    });
-
-    it('should return 401 without authentication', async () => {
-      const response = await request(app)
-        .post('/api/resource')
-        .send(validPayload);
-
-      expect(response.status).toBe(401);
-    });
-  });
-});
-```
-
-**Integration test categories:**
-| Category | What to Test | Setup Needed |
-|----------|-------------|--------------|
-| API routes | Request/response cycle, status codes, body shape | Test server, auth tokens |
-| Database queries | CRUD operations, constraints, transactions | Test database, seed data |
-| Service-to-service | Function calls across module boundaries | Mocked external services |
-| Middleware | Auth, validation, rate limiting, error handling | Request mocks |
-
-### Step 5: Generate Component Tests
-
-For React/UI components (user-event based):
-
-```javascript
-import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { ComponentName } from './ComponentName';
-
-describe('<ComponentName />', () => {
-  const defaultProps = {
-    onSubmit: vi.fn(),
-    initialValue: '',
-  };
-
-  it('renders with default props', () => {
-    render(<ComponentName {...defaultProps} />);
-    expect(screen.getByRole('button', { name: /submit/i })).toBeInTheDocument();
-  });
-
-  it('calls onSubmit with form data when submitted', async () => {
-    const user = userEvent.setup();
-    render(<ComponentName {...defaultProps} />);
-
-    await user.type(screen.getByLabelText(/email/i), 'test@example.com');
-    await user.click(screen.getByRole('button', { name: /submit/i }));
-
-    expect(defaultProps.onSubmit).toHaveBeenCalledWith({
-      email: 'test@example.com',
-    });
-  });
-
-  it('shows validation error for invalid input', async () => {
-    const user = userEvent.setup();
-    render(<ComponentName {...defaultProps} />);
-
-    await user.type(screen.getByLabelText(/email/i), 'not-an-email');
-    await user.click(screen.getByRole('button', { name: /submit/i }));
-
-    expect(screen.getByText(/valid email/i)).toBeInTheDocument();
-    expect(defaultProps.onSubmit).not.toHaveBeenCalled();
-  });
-
-  it('disables submit button while loading', () => {
-    render(<ComponentName {...defaultProps} isLoading={true} />);
-    expect(screen.getByRole('button', { name: /submit/i })).toBeDisabled();
-  });
-});
-```
-
-**Component testing rules:**
-- Query by role, label, or text — never by class name or test ID (unless necessary)
-- Use `userEvent` over `fireEvent` — simulates real user behavior
-- Test user-visible behavior, not implementation details
-- Don't test styling — test that elements appear/disappear
-- Mock child components only when they have side effects
-
-### Step 6: Mock External Dependencies
-
-Provide mocking patterns for common services:
-
-**Database (Supabase/Prisma/Drizzle):**
-```javascript
-// Mock Supabase client
-vi.mock('@/lib/supabase', () => ({
-  supabase: {
-    from: vi.fn(() => ({
-      select: vi.fn().mockReturnThis(),
-      insert: vi.fn().mockReturnThis(),
-      update: vi.fn().mockReturnThis(),
-      delete: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: mockData, error: null }),
-    })),
-    auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user: mockUser }, error: null }),
-    },
-  },
-}));
-```
-
-**External APIs (Stripe, SendGrid, etc.):**
-```javascript
-// Mock Stripe
-vi.mock('stripe', () => ({
-  default: vi.fn(() => ({
-    customers: {
-      create: vi.fn().mockResolvedValue({ id: 'cus_test' }),
-      retrieve: vi.fn().mockResolvedValue(mockCustomer),
-    },
-    checkout: {
-      sessions: {
-        create: vi.fn().mockResolvedValue({ url: 'https://checkout.stripe.com/test' }),
-      },
-    },
-  })),
-}));
-```
-
-**Fetch/HTTP:**
-```javascript
-// Mock global fetch
-const mockFetch = vi.fn();
-global.fetch = mockFetch;
-
-beforeEach(() => {
-  mockFetch.mockResolvedValue({
-    ok: true,
-    json: async () => mockResponse,
-    status: 200,
-  });
-});
-```
-
-**Mocking principles:**
-- Mock at the boundary — mock the external service, not your wrapper
-- Reset mocks between tests (`vi.clearAllMocks()` in `afterEach`)
-- Test both success and failure responses from mocks
-- Use `mockResolvedValueOnce` for sequence-dependent tests
-
-### Step 7: Edge Case Coverage
-
-Systematic edge case checklist per input type:
-
-| Input Type | Edge Cases to Test |
-|-----------|-------------------|
-| **String** | Empty `""`, whitespace `"  "`, very long (10000 chars), special chars `<>&"'`, unicode `🎉`, SQL injection `'; DROP TABLE--` |
-| **Number** | Zero `0`, negative `-1`, float `0.1 + 0.2`, `NaN`, `Infinity`, max safe integer |
-| **Array** | Empty `[]`, single item `[x]`, very large (10000 items), nested arrays, duplicate items |
-| **Object** | Empty `{}`, missing required keys, extra unknown keys, nested nulls |
-| **Date** | Past date, future date, midnight, DST transition, invalid date string, epoch `0` |
-| **Boolean** | `true`, `false`, truthy `1`, falsy `0`, `null`, `undefined` |
-| **File** | Empty file, very large file, wrong format, corrupted data, missing file |
-| **Auth** | No token, expired token, invalid token, wrong permissions, admin vs user |
-
-**Error state testing:**
-```javascript
-describe('error handling', () => {
-  it('should handle network timeout', async () => {
-    mockFetch.mockRejectedValue(new Error('ETIMEOUT'));
-    await expect(fetchData()).rejects.toThrow('ETIMEOUT');
-  });
-
-  it('should handle malformed JSON response', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => { throw new SyntaxError('Unexpected token'); },
-    });
-    await expect(fetchData()).rejects.toThrow();
-  });
-
-  it('should handle concurrent access', async () => {
-    const results = await Promise.all([
-      processItem('item-1'),
-      processItem('item-2'),
-      processItem('item-3'),
-    ]);
-    expect(results).toHaveLength(3);
-  });
-});
-```
-
-### Step 8: Test File Organization
-
-Structure test files to mirror source code:
-
-```
-src/
-  utils/
-    formatDate.ts         →  __tests__/utils/formatDate.test.ts
-  services/
-    paymentService.ts     →  __tests__/services/paymentService.test.ts
-  api/
-    routes/
-      users.ts            →  __tests__/api/routes/users.test.ts
-  components/
-    UserForm.tsx          →  __tests__/components/UserForm.test.tsx
-```
-
-**Or colocated pattern:**
-```
-src/
-  utils/
-    formatDate.ts
-    formatDate.test.ts
-  components/
-    UserForm.tsx
-    UserForm.test.tsx
-```
-
-Follow whichever pattern the project already uses. If no convention exists, recommend colocated.
-
-### Step 9: Output
-
-Present the complete test suite:
-
-```
-━━━ TEST SUITE: [Module/Feature Name] ━━━━━
-
-── COVERAGE ANALYSIS ──────────────────────
-Critical paths identified: [count]
-Current coverage: [%]
-Target coverage: [%]
-
-── UNIT TESTS ─────────────────────────────
-File: [test file path]
-Tests: [count]
-[complete test file code]
-
-── INTEGRATION TESTS ──────────────────────
-File: [test file path]
-Tests: [count]
-[complete test file code]
-
-── COMPONENT TESTS ────────────────────────
-File: [test file path]
-Tests: [count]
-[complete test file code]
-
-── MOCKS ──────────────────────────────────
-[mock setup files]
-
-── EDGE CASES COVERED ─────────────────────
-[checklist of edge cases per input type]
-
-── RUN INSTRUCTIONS ───────────────────────
-Command: [test run command]
-Watch mode: [watch command]
-Coverage report: [coverage command]
-```
+Required: target code (files/modules/features), language/framework.
+Detect from project: test runner (Jest/Vitest/pytest/Go testing), existing tests, current coverage.
+Ask: priority areas (business logic, API routes, UI components) and external dependencies needing mocks.
+
+> Gate: Do not generate tests without knowing the test runner and target code.
+
+### Step 2: Identify Critical Paths
+
+Classify every target by priority:
+
+| Signal | Priority | Coverage target |
+|--------|----------|----------------|
+| Handles money or sensitive data | Critical | 90%+ |
+| Called by 5+ modules | Critical | 90%+ |
+| Recently had bugs | Critical | 90%+ |
+| Complex branching (3+ conditions) | Important | 85%+ |
+| Pure function, clear I/O | Standard | 100% (easy) |
+| UI component, user-facing | Standard | 80%+ |
+
+Test critical paths first. Don't waste time on getters/setters or framework boilerplate.
+
+> Gate: Priority list confirmed with user before generating tests.
+
+### Step 3: Select Test Types
+
+Decision tree per code unit:
+
+- **Pure functions, validators, transforms** → Unit tests. Test all branches, boundary values (0, -1, MAX, empty, null), and error states. Arrange-Act-Assert structure. One assertion concept per test.
+- **API routes, DB queries, middleware** → Integration tests. Test the full request/response cycle: happy path, validation errors (400), auth failures (401/403), not found (404), conflict (409). Use real test DB when possible; mock only external third-party APIs.
+- **React/UI components** → Component tests. Query by role/label/text, never by class or test ID. Use `userEvent` over `fireEvent`. Test user-visible behavior (appears, disappears, calls handler), not implementation details. Mock child components only when they have side effects.
+- **Cross-service workflows** → E2E tests (flag as out of scope for this skill unless explicitly requested).
+
+> Gate: Test type selected for each target before writing.
+
+### Step 4: Apply Mocking Rules
+
+When to mock vs use real:
+
+| Dependency | Mock? | Reason |
+|-----------|-------|--------|
+| Database (own) | Prefer real (test DB) | Mocked DB tests pass when real queries fail |
+| Third-party APIs (Stripe, AWS) | Always mock | Can't control, costs money, flaky |
+| File system | Mock in unit, real in integration | Speed vs fidelity tradeoff |
+| Time/dates | Always mock | Deterministic tests |
+| Internal modules | Don't mock | Test the real interaction |
+| Environment variables | Inject via setup | Never mock `process.env` directly |
+
+Mock at the boundary, not in the middle. If you're mocking more than 2 things in a unit test, the unit is too coupled — flag for refactoring.
+
+### Step 5: Generate Tests
+
+Naming convention: `describe` block = module/class, nested `describe` = function/method, `it` = `should [behavior] when [condition]`.
+
+For each function, generate tests in this order:
+1. Happy path — normal input, expected output
+2. Edge cases — null, empty, zero, negative, max value, unicode, whitespace
+3. Error states — invalid input throws correct error type
+4. Boundary values — off-by-one, type coercion, overflow
+
+Coverage targets by function type:
+- Pure functions / validators: 100%
+- Business logic: 90%
+- Data transforms: 95%
+- API routes: all status codes exercised
+- Components: render, interaction, error state, loading state
+
+### Step 6: Verify and Report
+
+Run the test suite. Report:
+- Tests written (count by type)
+- Coverage delta (before → after)
+- Uncovered paths flagged but intentionally skipped (with reason)
+- Flaky test risks (time-dependent, order-dependent, network-dependent)
+
+> Gate: All generated tests pass before marking complete.
+
+## Examples
+
+**1. Node.js API with Prisma**: Analyze 12 route handlers → prioritize payment and auth routes as Critical, CRUD routes as Standard → generate 8 integration tests (supertest + test DB) for auth/payment, 15 unit tests for validators and transforms, mock Stripe webhook verification only.
+
+**2. React dashboard with forms**: Analyze 6 form components → generate component tests using Testing Library + userEvent for each form (render, submit, validation error, loading state), unit tests for 4 utility functions, mock API client at module boundary.
+
+## Common Issues
+
+- **Tests pass in isolation, fail together**: Shared mutable state between tests — add proper `beforeEach` cleanup or isolate test databases per suite.
+- **Mocked tests pass but production breaks**: Over-mocking hides real integration issues — prefer test DB over mocked DB, mock only at third-party boundaries.
+- **Flaky async tests**: Missing `await`, race conditions, or network calls leaking through mocks — ensure all async operations are awaited and all external calls are intercepted.
+
+## Anti-Patterns
+
+- Testing implementation details instead of behavior (checking internal state, asserting on private methods)
+- One giant test that validates everything — split into focused single-assertion tests
+- Mocking the module under test (testing the mock, not the code)
+- Copy-pasting test bodies instead of using parameterized/table-driven tests
+- No cleanup in `afterEach` — tests leak state and become order-dependent
+- Snapshot tests for dynamic content (dates, IDs) — they break on every run
+- Testing framework code (does Express routing work? does React render?)
+
+## Escalation
+
+Hand off when: E2E browser testing (Playwright/Cypress), load/performance testing, security-focused fuzzing, visual regression testing, test infrastructure setup (CI matrix, parallelization).
 
 ## Inputs
-- Target code files or modules
-- Language and test framework
-- Current coverage level
-- Priority areas (business logic, API, UI)
-- External dependencies to mock
+- Target code, language/framework, test runner, current coverage, priority areas
 
 ## Outputs
-- Critical path analysis with priority ranking
-- Unit tests for utility functions and business logic
-- Integration tests for API routes with setup/teardown
-- Component tests using user-event patterns
-- Mock configurations for external dependencies (Supabase, Stripe, APIs)
-- Systematic edge case coverage (null, empty, boundary, error states)
-- Complete test files with setup, assertions, and cleanup
-- Test naming convention: describe/it with clear behavior descriptions
+- Test files organized by type (unit/integration/component), coverage report delta, uncovered path inventory
 
 ## Level History
 
-- **Lv.1** — Base: Critical path analysis, unit test generation with boundary/edge cases, integration tests with setup/teardown, component tests (user-event based), mock patterns for Supabase/Stripe/fetch, systematic edge case checklist per input type, test file organization, describe/it naming convention. (Origin: MemStack v3.2, Mar 2026)
+- **Lv.1** — Base: Test generation for Node/Python/React with unit/integration/component patterns, mocking strategies, coverage targets. (Origin: MemStack v3.3, Mar 2026)
+- **Lv.2** — Compressed: Removed all code examples and mocking templates. Retained decision trees, priority classification, mocking rules, coverage targets, naming conventions. (Mar 2026)

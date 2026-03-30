@@ -1,320 +1,194 @@
 ---
 name: content-pipeline
-description: "Use when the user says 'content pipeline', 'content automation', 'auto-publish', 'content workflow', 'repurpose content', 'blog to social', or wants to automate the creation, formatting, and publishing of content across platforms."
+description: "Design end-to-end content automation pipelines. WHEN: 'content pipeline', 'content automation', 'auto-publish', 'repurpose content', 'blog to social'. NOT WHEN: single social post, launch announcement (see launch-plan), or n8n workflow where content is incidental (chain to n8n-workflow-builder)."
 ---
 
+# Content Pipeline
 
-# 📡 Content Pipeline — Multi-Platform Content Automation
-*Design an end-to-end content pipeline from ideation through publishing with AI integration, quality gates, and cross-platform formatting.*
+Design a multi-platform content pipeline with stage gates, AI integration, and analytics feedback.
 
 ## Activation
 
-When this skill activates, output:
-
-`📡 Content Pipeline — Designing your content automation pipeline...`
-
 | Context | Status |
 |---------|--------|
-| **User says "content pipeline", "content automation", "auto-publish"** | ACTIVE |
-| **User wants to repurpose content across platforms** | ACTIVE |
-| **User mentions YouTube + blog + social automation** | ACTIVE |
-| **User wants an n8n workflow (content is just the use case)** | Chain: content-pipeline → n8n-workflow-builder |
-| **User wants a single social media post (not a pipeline)** | DORMANT |
-| **User wants a launch announcement sequence** | DORMANT — see launch-plan |
+| "content pipeline", "content automation", "auto-publish" | ACTIVE |
+| Repurpose content across platforms | ACTIVE |
+| YouTube + blog + social automation | ACTIVE |
+| n8n workflow (content is just the use case) | CHAIN to n8n-workflow-builder |
+| Single social media post | DORMANT |
+| Launch announcement sequence | DORMANT -- see launch-plan |
 
-## Protocol
+## Instructions
 
 ### Step 1: Gather Inputs
 
-Ask the user for:
-- **Content type**: Blog posts, YouTube videos, podcasts, newsletters, social media, or multi-format?
-- **Source material**: Where does raw content come from? (scripts, recordings, notes, ideas list)
-- **Target platforms**: Where should content be published? (blog, YouTube, Twitter/X, LinkedIn, Instagram, newsletter)
-- **Posting schedule**: How often? (daily, 3x/week, weekly, biweekly)
-- **Team**: Solo creator or team? Who reviews before publish?
-- **Existing tools**: What do you already use? (CMS, email platform, video editor)
+Collect before designing anything:
 
-### Step 2: Design Pipeline Stages
+- **Content type**: Blog, video, podcast, newsletter, social, or multi-format
+- **Source material**: Where raw content originates (scripts, recordings, notes)
+- **Target platforms**: Blog, YouTube, Twitter/X, LinkedIn, Instagram, newsletter
+- **Posting cadence**: Daily, 3x/week, weekly, biweekly
+- **Team structure**: Solo or team? Who reviews?
+- **Existing tools**: CMS, email platform, schedulers already in use
 
-Map the full content lifecycle:
+**Gate**: All six inputs answered before proceeding.
 
-```
-┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐
-│ IDEATION │──→│ CREATION │──→│  REVIEW  │──→│ FORMAT   │──→│ PUBLISH  │
-│          │   │          │   │          │   │          │   │          │
-│ Topics   │   │ Draft    │   │ Human QA │   │ Per-plat │   │ Schedule │
-│ Research │   │ AI-assist│   │ Edit     │   │ Assets   │   │ Distribute│
-│ Calendar │   │ Media    │   │ Approve  │   │ SEO      │   │ Track    │
-└──────────┘   └──────────┘   └──────────┘   └──────────┘   └──────────┘
-       │              │              │              │              │
-       ▼              ▼              ▼              ▼              ▼
-   Ideas DB      Drafts DB     Approved DB    Assets DB    Published DB
-```
+### Step 2: Define Pipeline Stages
 
-**Stage tracking:**
+Map the five-stage lifecycle. Every piece flows through all five:
 
-| Stage | Status Values | Trigger to Next |
-|-------|--------------|-----------------|
-| Ideation | idea → researched → scheduled | Added to content calendar |
-| Creation | draft_started → draft_complete | Author marks complete |
-| Review | in_review → changes_requested → approved | Reviewer approves |
-| Formatting | formatting → assets_ready | All platform variants generated |
-| Publishing | scheduled → published → distributed | Publish date reached |
+| Stage | Status Flow | Advances When |
+|-------|-------------|---------------|
+| Create | draft_started > draft_complete | Author marks complete |
+| Review | in_review > changes_requested > approved | Reviewer approves |
+| Schedule | formatting > assets_ready | All platform variants generated |
+| Publish | scheduled > published | Publish date reached |
+| Distribute | published > distributed | All platform posts confirmed live |
 
-### Step 3: AI Integration Points
+**Content type routing** -- source format determines which derivative formats to generate:
 
-Identify where AI accelerates the pipeline:
+- Blog post (source of truth) > thread, LinkedIn post, newsletter section, carousel, pin
+- YouTube video > blog transcript, short clips, quote cards
+- Podcast > show notes blog, audiogram clips, quote cards
+- Newsletter > social teasers, blog archive post
 
-| Stage | AI Task | Input | Output | Human Check? |
-|-------|---------|-------|--------|-------------|
-| Ideation | Topic generation | Niche + trending keywords | 10 topic ideas with angles | Yes — pick top 3 |
-| Ideation | Title optimization | Working title | 5 title variants with hooks | Yes — choose one |
-| Creation | First draft | Outline + key points | Blog post draft | Yes — heavy edit |
-| Creation | YouTube script | Topic + talking points | Scripted sections | Yes — personalize |
-| Formatting | SEO meta | Full article | Meta title, description, keywords | Light review |
-| Formatting | Social posts | Article content | Twitter thread, LinkedIn post, IG caption | Yes — tone check |
-| Formatting | Email subject | Newsletter content | 5 subject line variants | Yes — pick one |
-| Publishing | Alt text | Images | Descriptive alt text | Light review |
+**Decision**: If user has one dominant format, make it the source of truth. If multi-format, ask which is canonical.
 
-**AI prompt templates for each task:**
+**Gate**: Stage map and source-of-truth format confirmed.
 
-```
-── TOPIC GENERATION ───────────────────────
-Input: "Generate 10 content ideas for [niche]. Target audience: [audience].
-       Current trends: [trends]. Avoid topics we've covered: [recent topics].
-       Format: Title | Angle | Target keyword | Estimated interest (1-10)"
+### Step 3: Design Approval Workflow
 
-── TITLE OPTIMIZATION ─────────────────────
-Input: "Generate 5 title variants for: [working title].
-       Optimize for: click-through, SEO keyword [keyword], accuracy.
-       Style: [informational / provocative / how-to / listicle]"
+Three quality gates. Skip none for published content:
 
-── SOCIAL REPURPOSING ─────────────────────
-Input: "Repurpose this article into platform-specific posts:
-       Article: [full text]
-       Platforms: Twitter (thread, 280 chars/tweet), LinkedIn (professional tone),
-       Instagram (casual, emoji-friendly, hashtags)"
-```
+**Gate A -- Content Approval** (after draft):
+- Factually accurate, brand-voice consistent, no AI artifacts
+- CTA present and relevant
+- Approve > auto-format for all platforms. Reject > return to creation with notes.
 
-### Step 4: Multi-Platform Formatting
+**Gate B -- Visual/Format Review** (after platform formatting):
+- Images licensed, thumbnail compelling, social posts standalone-readable, links working
+- Approve > schedule for publish. Reject > return to formatting.
 
-Define format specifications per platform:
+**Gate C -- Post-Publish Check** (1 hour after publish):
+- Automated: links resolve, images load
+- Manual: formatting spot-check, monitor initial responses
+- Fix issues immediately if found
 
-| Platform | Format | Length | Media | Unique Requirements |
-|----------|--------|--------|-------|-------------------|
-| **Blog** | HTML/Markdown | 1500-3000 words | Header image, inline images | SEO meta, schema markup, internal links |
-| **YouTube** | Video | 8-15 min | Thumbnail 1280x720 | Title (60 chars), description (5000 chars), tags, chapters |
-| **Twitter/X** | Thread | 3-10 tweets, 280 chars each | 1 image per tweet optional | Hook tweet, numbered, CTA in last tweet |
-| **LinkedIn** | Post | 1300 chars (pre-fold: 210) | 1 image or document carousel | Professional tone, line breaks, no hashtag spam |
-| **Instagram** | Carousel or Reel | Caption: 2200 chars | 1080x1080 images or 9:16 video | 20-30 hashtags, alt text, call to action |
-| **Newsletter** | Email | 500-1000 words | Inline images | Subject line, preview text, unsubscribe link, CTA button |
+**Approval workflow rules**:
+- Solo creator: self-review with 24-hour cooling period between draft and approval
+- Team of 2-3: author drafts, one reviewer approves, no self-approval on Gate A
+- Team of 4+: rotating reviewer assignment, SLA of 48 hours on Gate A
+- Automation: status column in Notion/Airtable; n8n watches for status change; Slack notification with one-click approve
 
-**Content atomization** — from one source, generate:
+**Gate**: Approval workflow documented with who/when/how for each gate.
 
-```
-Blog Post (source of truth)
-  ├── YouTube video script (expand key points, add examples)
-  ├── Twitter thread (extract key insights, 1 per tweet)
-  ├── LinkedIn post (professional summary + personal take)
-  ├── Instagram carousel (visual key points, 5-7 slides)
-  ├── Newsletter (summary + personal commentary + CTA)
-  └── Pinterest pin (infographic of key stats/steps)
-```
+### Step 4: Build Scheduling Strategy
 
-### Step 5: Content Calendar & Scheduling
+**Calendar pattern** -- assign platform days based on cadence:
 
-Design the publishing schedule:
+- High volume (daily): Rotate platforms. Blog Mon, thread Tue, video Wed, LinkedIn Thu, newsletter Fri.
+- Medium (3x/week): Blog + thread Mon, LinkedIn Wed, newsletter Fri.
+- Low (weekly): Blog + all social derivatives same day, newsletter end of week.
 
-```
-── WEEKLY CONTENT CALENDAR ────────────────
+**Scheduling rules**:
+- Publish blog first (SEO indexing head start), derivatives 24-48h later
+- Newsletter aggregates weekly, never publish same day as blog
+- Social posts: schedule via Buffer/Typefully API or n8n
+- Blog: CMS scheduled publish via API
+- Email: platform scheduled send
 
-Monday:    Blog post published (written prev week)
-Tuesday:   Twitter thread (repurposed from blog)
-Wednesday: YouTube video live (filmed prev week)
-Thursday:  LinkedIn post (professional angle on blog topic)
-Friday:    Newsletter sent (weekly roundup + personal note)
-Saturday:  Instagram carousel (visual summary of week's content)
-Sunday:    Ideation session for next week
-```
+**Gate**: Calendar template filled for at least 2 weeks.
 
-**Automated scheduling:**
-- **Buffer/Hootsuite/Typefully**: Schedule social posts
-- **n8n workflow**: Trigger format conversion and scheduling
-- **CMS scheduled publish**: Blog posts via WordPress/Ghost/Notion API
-- **Email platform**: ConvertKit/Mailchimp scheduled sends
+### Step 5: Configure Cross-Platform Publishing
 
-**Calendar management:**
-```
-Content Calendar Table:
-  id | topic | status | blog_date | youtube_date | social_date | newsletter_date | notes
-```
+**Decision tree per platform**:
 
-### Step 6: Quality Gates
+| Platform | Auto-publish? | Condition |
+|----------|--------------|-----------|
+| Blog | Yes | After Gate A approval |
+| Twitter/X | Yes | After Gate B, via API |
+| LinkedIn | Semi-auto | Draft via API, manual review of preview |
+| Instagram | Manual | API limitations; send formatted content to Slack for manual post |
+| YouTube | Manual | Upload requires metadata review |
+| Newsletter | Yes | After Gate B, scheduled send |
 
-Define human review checkpoints:
+**AI integration points** (where AI accelerates, not replaces):
 
-```
-── QUALITY GATES ──────────────────────────
+| Stage | AI Task | Human Review Level |
+|-------|---------|-------------------|
+| Create | First draft from outline | Heavy edit required |
+| Create | Video script from topic | Personalization required |
+| Schedule | SEO meta generation | Light review |
+| Schedule | Social post derivatives | Tone check |
+| Schedule | Email subject lines (5 variants) | Pick one |
+| Distribute | Alt text for images | Light review |
 
-Gate 1: CONTENT APPROVAL
-  When: After AI draft is complete
-  Who: Content creator / editor
-  Checks:
-    □ Factually accurate
-    □ Brand voice consistent
-    □ No AI artifacts (robotic phrasing, hallucinated facts)
-    □ Clear structure and flow
-    □ CTA present and relevant
-  Action: Approve → auto-format for all platforms
-          Reject → return to creation with notes
+**Gate**: Publishing config documented per platform.
 
-Gate 2: VISUAL REVIEW
-  When: After platform formatting + asset generation
-  Who: Content creator / designer
-  Checks:
-    □ Images appropriate and licensed
-    □ Thumbnail compelling
-    □ Social posts read well standalone
-    □ Links working
-  Action: Approve → schedule for publish
-          Reject → return to formatting
+### Step 6: Analytics Feedback Loop
 
-Gate 3: POST-PUBLISH CHECK
-  When: 1 hour after publishing
-  Who: Automated + content creator
-  Checks:
-    □ All links resolve (automated)
-    □ Images loading (automated)
-    □ No broken formatting (manual spot check)
-    □ Comments/responses monitored
-  Action: Fix issues if found
-```
+**Tracking windows** by platform:
+- Blog: daily for 7 days (views, time on page, bounce)
+- YouTube: daily for 14 days (views, watch time, CTR, retention)
+- Social (Twitter/LinkedIn/Instagram): 48 hours (impressions, engagement)
+- Newsletter: 72 hours (open rate, click rate, unsubscribes)
 
-**Automation-friendly gates:**
-- Use a Notion/Airtable status column that the pipeline checks
-- n8n workflow waits for status change from "in_review" to "approved"
-- Slack notification when content is ready for review with one-click approve
+**Feedback-to-ideation rules**:
+- Top 20% performers by engagement > create more in same category
+- Bottom 20% > analyze cause (topic, timing, headline, format) before repeating
+- Audience questions from comments > direct input to ideation stage
+- Format with highest engagement rate > increase frequency
 
-### Step 7: Analytics & Feedback Loop
+**Composite score**: Rate each piece 1-10 across platforms. Verdict: Scale (7+), Iterate (4-6), Retire (1-3).
 
-Track performance to improve future content:
+**Gate**: Analytics sources identified, scorecard template created.
 
-**Per-piece metrics:**
+## Examples
 
-| Platform | Metric | Source | Track |
-|----------|--------|--------|-------|
-| Blog | Page views, time on page, bounce rate | Google Analytics | Daily for 7 days |
-| YouTube | Views, watch time, CTR, retention | YouTube Studio | Daily for 14 days |
-| Twitter/X | Impressions, engagements, link clicks | Twitter Analytics | 48 hours |
-| LinkedIn | Impressions, reactions, comments | LinkedIn Analytics | 48 hours |
-| Instagram | Reach, saves, shares | Instagram Insights | 48 hours |
-| Newsletter | Open rate, click rate, unsubscribes | Email platform | 72 hours |
+**Solo blogger, weekly cadence**: Blog source of truth > auto-generate thread + LinkedIn post + newsletter section via n8n. Self-review with 24h cooling. Publish blog Monday, social Tuesday, newsletter Friday. Track via GA + native analytics. Monthly scorecard review.
 
-**Feedback into ideation:**
-- Top-performing topics → create more in same category
-- High-engagement formats → prioritize that format
-- Low performers → analyze why (topic, timing, headline, format?)
-- Comment themes → new content ideas from audience questions
+**Team of 3, daily cadence**: Rotating content calendar across blog/video/social. Author drafts, editor reviews (48h SLA), designer handles formatting. n8n orchestrates: webhook on blog publish triggers derivative generation, Slack notification for Gate B, auto-schedule approved social posts. Weekly analytics digest to team channel.
 
-**Content scorecard:**
-```
-Content: "[Title]"
-Published: [date]
-Score: [1-10 composite]
-  Blog:       [X] views, [X]% bounce
-  YouTube:    [X] views, [X]% retention
-  Social:     [X] impressions, [X]% engagement
-  Newsletter: [X]% open, [X]% click
-Verdict: [Scale / Iterate / Retire]
-```
+## Common Issues
 
-### Step 8: Tooling & Integration Map
+- **AI artifacts in published content**: Gate A must explicitly check for robotic phrasing, hallucinated statistics, and generic filler. Never auto-publish AI drafts without human Gate A.
+- **Platform API rate limits**: Buffer/Twitter/LinkedIn APIs have daily post limits. Queue excess posts for next available slot rather than failing silently.
+- **Newsletter-blog cannibalization**: If newsletter reproduces full blog post, readers skip the blog. Newsletter should summarize + link, not duplicate.
 
-**Core tools:**
+## Anti-Patterns
 
-| Function | Tool | Integration Method |
-|----------|------|-------------------|
-| Workflow orchestration | n8n | Self-hosted or cloud |
-| Content drafting | Claude API / GPT API | API call from n8n |
-| Blog publishing | WordPress / Ghost / Notion | REST API |
-| Video production | Remotion / Descript | CLI or API |
-| Email newsletter | SendGrid / ConvertKit | API |
-| Social scheduling | Buffer API / Twitter API / LinkedIn API | OAuth + API |
-| Asset storage | Cloudinary / S3 | Upload API |
-| Analytics | Google Analytics / platform native | Reporting API |
-| Content calendar | Notion / Airtable | API |
+- Publishing AI-generated content without human review at Gate A
+- Identical copy across all platforms (each platform needs native formatting and tone)
+- Scheduling all derivatives simultaneously (stagger for algorithm favor)
+- Skipping analytics review (pipeline becomes output-only with no learning)
+- Over-automating Instagram/YouTube (these platforms penalize bot-like posting patterns)
 
-**n8n workflow design:**
+## Escalation
 
-```
-Workflow 1: DAILY CONTENT CHECK
-  Schedule Trigger (9 AM) → Check calendar for today's content
-  → IF content ready → Format for platform → Schedule/publish
-  → ELSE → Send "nothing scheduled" alert
-
-Workflow 2: CONTENT REPURPOSING
-  Webhook (blog published) → Fetch full article
-  → AI: Generate Twitter thread → Schedule via Buffer
-  → AI: Generate LinkedIn post → Schedule via Buffer
-  → AI: Generate newsletter section → Queue for weekly send
-  → AI: Generate Instagram caption → Send to Slack for manual post
-
-Workflow 3: WEEKLY ANALYTICS
-  Schedule Trigger (Monday 8 AM) → Pull analytics from all platforms
-  → Compile scorecard per piece → Store in Notion/Airtable
-  → Generate weekly report → Send to Slack/email
-```
-
-### Step 9: Output
-
-Present the complete pipeline specification:
-
-```
-━━━ CONTENT PIPELINE: [Name] ━━━━━━━━━━━━━
-
-── PIPELINE STAGES ────────────────────────
-[5-stage flow diagram]
-
-── AI INTEGRATION ─────────────────────────
-[AI tasks per stage with prompt templates]
-
-── PLATFORM FORMATS ───────────────────────
-[format specs per platform]
-
-── CONTENT CALENDAR ───────────────────────
-[weekly schedule template]
-
-── QUALITY GATES ──────────────────────────
-[3 checkpoints with checklists]
-
-── ANALYTICS ──────────────────────────────
-[per-piece metrics + scorecard template]
-
-── TOOL MAP ───────────────────────────────
-[tools + integration methods]
-
-── N8N WORKFLOWS ──────────────────────────
-[workflow designs for automation]
-```
+- If user needs n8n workflow implementation details > chain to n8n-workflow-builder
+- If user needs SEO optimization for blog content > chain to site-audit or meta-tag-optimizer
+- If user needs email sequence design (not just newsletter) > chain to email-sequence
+- If pipeline scope exceeds 5 platforms or 3 content types > recommend phased rollout starting with one source-of-truth format
 
 ## Inputs
-- Content type and format
-- Source material type
+
+- Content type and source format
 - Target platforms
-- Posting schedule
-- Team / review process
-- Existing tools
+- Posting cadence
+- Team size and review process
+- Existing tools and integrations
 
 ## Outputs
-- 5-stage pipeline design (ideation → creation → review → format → publish)
-- AI integration points with prompt templates
-- Multi-platform format specifications
-- Content calendar with scheduling automation
-- Quality gates with review checklists
-- Analytics tracking with content scorecard
-- Tool and integration map
-- n8n workflow designs for orchestration
+
+- 5-stage pipeline design (create > review > schedule > publish > distribute)
+- Content type routing map (source of truth > derivatives)
+- Approval workflow with 3 quality gates
+- Publishing calendar template
+- Cross-platform publishing config (auto vs. manual per platform)
+- AI integration points with review levels
+- Analytics feedback loop with composite scorecard
 
 ## Level History
 
-- **Lv.1** — Base: 5-stage content pipeline, AI integration at 8 touch points with prompt templates, multi-platform format specs (blog, YouTube, Twitter, LinkedIn, Instagram, newsletter), content calendar with atomization strategy, 3-tier quality gates, analytics feedback loop with content scorecard, n8n workflow designs for daily publishing and weekly analytics. (Origin: MemStack v3.2, Mar 2026)
+- **Lv.1** -- Base: 5-stage content pipeline, AI integration at 8 touch points with prompt templates, multi-platform format specs (blog, YouTube, Twitter, LinkedIn, Instagram, newsletter), content calendar with atomization strategy, 3-tier quality gates, analytics feedback loop with content scorecard, n8n workflow designs for daily publishing and weekly analytics. (Origin: MemStack v3.2, Mar 2026)
+- **Lv.2** -- Compressed: Creator-level density rewrite. Replaced verbose workflow configs and prompt templates with decision rules. Added content type routing, approval workflow rules by team size, scheduling strategy by cadence, cross-platform auto/manual decision tree, analytics feedback-to-ideation rules. Preserved all 5 pipeline stages and 3 quality gates. (Origin: MemStack v3.2, Mar 2026)

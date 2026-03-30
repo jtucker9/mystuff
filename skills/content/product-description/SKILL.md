@@ -1,288 +1,162 @@
 ---
 name: product-description
-description: "Use when the user says 'product description', 'product listing', 'product copy', 'Amazon listing', 'Shopify description', or wants to write optimized product listing copy for an e-commerce platform."
+description: "WHAT: Write conversion-optimized e-commerce product listing copy with benefit-driven headlines, feature bullets, storytelling, and platform-specific SEO. WHEN: 'product description', 'product listing', 'product copy', 'Amazon listing', 'Shopify description', 'Etsy listing', e-commerce copy requests. NOT: pricing strategy (see pricing-strategy), full sales funnels (see sales-funnel), website SEO not tied to a product page (see seo-geo)."
 ---
 
-# 🏷️ Product Description — E-Commerce Listing Copy
-*Write conversion-optimized product descriptions with benefit-driven headlines, feature bullets, storytelling, specs, and platform-specific SEO formatting.*
+# Product Description — E-Commerce Listing Copy
 
 ## Activation
 
-When this skill activates, output:
-
-`🏷️ Product Description — Writing your product listing...`
-
 | Context | Status |
 |---------|--------|
-| **User says "product description", "product listing", "product copy"** | ACTIVE |
-| **User wants Amazon, Shopify, or e-commerce listing copy** | ACTIVE |
-| **User mentions product features, benefits, or listing optimization** | ACTIVE |
-| **User wants pricing strategy (not copy)** | DORMANT — see pricing-strategy |
-| **User wants a full sales funnel (product page is one piece)** | DORMANT — see sales-funnel |
-| **User wants SEO for a website (not a product listing)** | DORMANT — see seo-geo skill |
+| User says "product description", "product listing", "product copy" | ACTIVE |
+| User wants Amazon, Shopify, Etsy, or e-commerce listing copy | ACTIVE |
+| User mentions product features, benefits, or listing optimization | ACTIVE |
+| User wants pricing strategy (not copy) | DORMANT — see pricing-strategy |
+| User wants a full sales funnel | DORMANT — see sales-funnel |
+| User wants website SEO (not product listing) | DORMANT — see seo-geo |
 
-## Protocol
+## Instructions
 
 ### Step 1: Gather Inputs
 
-Ask the user for:
-- **Product name**: What is the product called?
-- **Category**: What type of product? (electronics, clothing, software, food, etc.)
-- **Key features**: Top 5-7 features or specifications
-- **Target buyer**: Who buys this? (demographics, needs, pain points)
-- **Price point**: How much does it cost?
-- **Platform**: Where is this being sold? (Amazon, Shopify, own website, Etsy, eBay)
-- **Competitors**: What are they competing against?
-- **Unique selling point**: What makes this different?
-- **Target keyword**: Primary SEO keyword (optional — skill can suggest)
+Collect before writing:
 
-### Step 2: Write the Headline
+| Input | Required | Notes |
+|-------|----------|-------|
+| Product name + category | Yes | |
+| Top 5-7 features/specs | Yes | |
+| Target buyer (demographics, pain points) | Yes | |
+| Price point | Yes | Informs positioning language |
+| Platform (Amazon/Shopify/Etsy/own site) | Yes | Determines format constraints |
+| Competitors + unique selling point | Yes | |
+| Target keyword | Optional | Skill can suggest if omitted |
 
-Lead with the primary benefit, not the product name:
+**Gate:** Do not proceed until product name, features, target buyer, and platform are confirmed.
 
-**Headline formulas:**
+### Step 2: Write Headline
 
-| Formula | Example | Platform |
-|---------|---------|----------|
-| **[Product] — [Primary Benefit]** | "ErgoDesk Pro — Eliminate Back Pain with Adjustable Standing" | Amazon |
-| **[Benefit] + [Product Category]** | "Ultra-Quiet Sleep Fan with 12-Speed White Noise Control" | Amazon |
-| **[Product Name]: [Outcome]** | "ZenBrew: Pour-Over Coffee in 90 Seconds" | Shopify |
-| **[Adjective] [Product] for [Audience]** | "Professional Wireless Microphone for Content Creators" | Multi-platform |
+Lead with the primary benefit, not the product name.
 
-**Headline rules by platform:**
+**Formulas:** `[Product] — [Primary Benefit]` | `[Benefit] + [Product Category]` | `[Product]: [Outcome]` | `[Adjective] [Product] for [Audience]`
 
-| Platform | Max Length | SEO Focus |
-|----------|-----------|-----------|
-| **Amazon** | 200 chars (80 visible on mobile) | Keywords in first 80 chars |
-| **Shopify** | No limit (H1 tag) | Primary keyword + benefit |
-| **Etsy** | 140 chars | Long-tail keywords, specific descriptors |
-| **Own site** | No limit | SEO title tag ≤ 60 chars |
+**Platform constraints:**
 
-Include the target keyword naturally in the headline. Don't keyword-stuff.
+| Platform | Max Length | Rule |
+|----------|-----------|------|
+| Amazon | 200 chars (80 visible mobile) | Keywords in first 80 chars |
+| Shopify | No limit (H1) | Primary keyword + benefit |
+| Etsy | 140 chars | Long-tail keywords, specific descriptors |
+| Own site | No limit | SEO title tag 60 chars or less |
 
-### Step 3: Write Benefit-Driven Bullet Points
+Include target keyword naturally. Never keyword-stuff.
 
-Transform features into benefits using the Feature → Benefit format:
+**Gate:** Headline must contain the primary keyword and a clear buyer benefit.
 
-```
-── BULLET POINTS ──────────────────────────
+### Step 3: Write Benefit-Driven Bullets
 
-• [FEATURE]: [BENEFIT — what this means for the buyer]
-  Example: "Noise-canceling microphone → Crystal-clear calls even in noisy coffee shops"
+Convert features to benefits using: `[FEATURE] -> [What this means for the buyer]`.
 
-• [FEATURE]: [BENEFIT]
-  Example: "12-hour battery → All-day power from morning commute to evening workout"
+- Lead with benefit, follow with feature (invert the spec sheet)
+- Amazon: 5-7 bullets (500 chars each). Shopify: 3-5. Etsy: 3-4.
+- Include one trust bullet (guarantee, support, certification)
+- Each bullet should preemptively answer an objection
+- Bold first few words for scannability (where platform allows)
+- Use action verbs or title case for scannable openers
 
-• [FEATURE]: [BENEFIT]
-  Example: "IPX7 waterproof → Sweat-proof and rain-proof — take it anywhere"
-
-• [FEATURE]: [BENEFIT]
-  Example: "One-touch pairing → Connect to your phone in 3 seconds flat"
-
-• [FEATURE]: [BENEFIT]
-  Example: "30-day money-back guarantee → Try risk-free — love it or return it"
-```
-
-**Bullet writing rules:**
-- Lead with the benefit, follow with the feature (inverted from spec sheets)
-- 5-7 bullets for Amazon, 3-5 for Shopify, 3-4 for Etsy
-- Use title case or start with action verbs for scannability
-- Include one bullet about guarantee/support/trust
-- Each bullet should answer a potential objection
-- Bold the first few words of each bullet (Amazon allows HTML in some contexts)
+**Gate:** Every bullet must contain a buyer-facing benefit, not just a raw spec.
 
 ### Step 4: Write Storytelling Paragraph
 
-Paint a picture of life WITH this product:
+Structure: Problem (pain point) -> Transformation (life with product) -> Credibility (social proof) -> Close (reinforce decision).
+
+Decision rules:
+- Use "you" language throughout — it is about the buyer, not the product
+- Be specific: "saves 45 minutes every morning" not "saves time"
+- Address the emotional benefit alongside the functional one
+- 100-200 words. One paragraph = one idea.
+- Sensory and emotional language: describe what the buyer sees, feels, hears, or experiences — never just what the product "has"
+
+**Gate:** Story must reference a specific pain point and a specific outcome.
+
+### Step 5: Specs + SEO + Platform Format
+
+**Specs:** Include only buyer-relevant specs. Always list what is in the box. Provide both imperial and metric for global sellers. Include certifications for trust.
+
+**SEO by platform:**
+
+- **Amazon:** Primary keyword in first 80 chars of title. 2-3 related keywords in bullets. Backend keywords (250 chars): synonyms, misspellings, translations. Decide A+ Content: recommend if brand-registered AND product has comparison-worthy features or lifestyle imagery.
+- **Shopify:** URL slug = `/products/[primary-keyword]`. Meta title 60 chars or less: `[Product] — [Benefit] | [Brand]`. Meta description 155 chars or less with CTA. Product schema markup (price, availability, reviews).
+- **Etsy:** First 160 chars of description act as meta description — front-load keywords. 13 tags, 20 chars each, long-tail phrases. Storytelling (craft/process) performs well.
+- **General placement:** Title = primary keyword (must). Bullet 1 = primary keyword (should). Bullets 2-3 = secondary keywords (should). Description = primary + secondary + long-tail (must). Image alt text = primary keyword + visual description (should).
+
+**Pricing context:** Reference the price point to calibrate language register. Premium products get aspirational language and exclusivity signals. Budget products emphasize value, durability, and comparison wins.
+
+**Gate:** SEO section must include at least primary keyword, meta title, and meta description tailored to the declared platform.
+
+### Step 6: Assemble + Deliver
+
+Output the complete listing in platform-ready format:
 
 ```
-── PRODUCT STORY ──────────────────────────
-
-[Opening — the problem]
-You know that feeling when [pain point the buyer experiences].
-[Specific scenario that makes the buyer nod in recognition.]
-
-[The transformation]
-[Product Name] changes that. [Describe the experience of using the product.
-What does the buyer's day look like now? What frustration is gone?
-What do they gain — time, money, confidence, comfort?]
-
-[Social proof or credibility]
-[Trusted by X customers / Featured in Y / Built by Z with N years experience.]
-
-[Close — reinforce the decision]
-[Make the buyer feel smart for choosing this product.
-Remove any last hesitation.]
+HEADLINE: [platform-optimized title]
+BULLETS: [benefit-led, platform count]
+STORY: [100-200 word paragraph]
+SPECS: [scannable table]
+SEO: [primary/secondary keywords, meta title, meta description, backend keywords if Amazon]
+CONVERSION NOTES: [primary objection addressed, trust signal, urgency element if applicable]
 ```
 
-**Storytelling rules:**
-- Use "you" language — it's about THEM, not the product
-- Be specific — "saves 45 minutes every morning" not "saves time"
-- Address the emotional benefit, not just the functional one
-- Keep it to 100-200 words (scannable, not a novel)
-- One paragraph = one idea
+## Examples
 
-### Step 5: Technical Specifications
+**Example 1 — Amazon bullet (wireless earbuds, $49)**
+`NOISE-CANCELING MICROPHONE — Crystal-clear calls even in noisy coffee shops. The dual-mic array isolates your voice so callers hear you, not the crowd.`
+Why it works: Benefit leads (clear calls), feature follows (dual-mic), specific scenario (coffee shop), objection handled (background noise).
 
-Present specs in a clean, scannable format:
+**Example 2 — Etsy title (handmade wallet, $65)**
+`Minimalist Leather Wallet, Slim Card Holder for Men, RFID Blocking, Personalized Gift, Anniversary`
+Why it works: Descriptive long-tail keywords, comma-separated for Etsy search, includes gift occasion for discovery.
 
-```
-── SPECIFICATIONS ─────────────────────────
+## Common Issues
 
-Dimensions:       [L × W × H] in / cm
-Weight:           [X] oz / g
-Material:         [material]
-Color options:    [colors available]
-Compatibility:    [devices, systems, standards]
-Battery:          [capacity, life, charge time]
-Connectivity:     [Bluetooth 5.3, USB-C, Wi-Fi, etc.]
-Warranty:         [duration and coverage]
-In the box:       [list of included items]
-Certifications:   [FCC, CE, UL, etc.]
-```
+1. **Feature-dumping without benefits.** Every bullet must answer "so what?" for the buyer. Raw specs belong in the specs table, not the bullets.
+2. **Wrong format for platform.** Amazon has strict character limits and backend keyword fields. Shopify uses HTML. Etsy weights title keywords heavily. Always check platform constraints before writing.
+3. **Generic storytelling.** "This product will change your life" converts poorly. Use specific scenarios, specific numbers, and specific outcomes.
 
-**Spec rules:**
-- Include only specs buyers actually care about
-- Use standard units (provide both imperial and metric if selling globally)
-- List what's IN THE BOX — reduces "what's included?" questions
-- Highlight certifications for trust-building
+## Anti-Patterns
 
-### Step 6: SEO Optimization
+- Writing the same copy for all platforms — each has different search algorithms and format rules
+- Keyword-stuffing the headline — degrades readability and triggers platform penalties
+- Skipping the trust bullet — buyers need at least one risk-reducer (guarantee, warranty, certification)
+- Using manufacturer spec-sheet language instead of buyer language
+- Omitting pricing context — a $15 product and a $500 product require fundamentally different tone and positioning
 
-Optimize for the target platform's search algorithm:
+## Escalation
 
-**Amazon SEO:**
-- **Title**: Primary keyword in first 80 chars, secondary keywords after
-- **Bullets**: Include 2-3 related keywords naturally
-- **Description**: Use remaining relevant keywords
-- **Backend keywords**: Misspellings, synonyms, Spanish translations (250 char limit)
-- **A+ Content**: Enhanced brand content with images and comparison charts
-
-**Shopify SEO:**
-- **URL slug**: `/products/[primary-keyword]`
-- **Meta title**: `[Product Name] — [Primary Benefit] | [Brand]` (≤ 60 chars)
-- **Meta description**: Benefit-focused summary with keyword (≤ 155 chars)
-- **Alt text**: Descriptive image alt text with keywords
-- **Schema markup**: Product schema with price, availability, reviews
-
-**General keyword placement:**
-```
-Title:          [primary keyword] ← MUST
-Bullet 1:      [primary keyword] ← SHOULD
-Bullet 2-3:    [secondary keywords] ← SHOULD
-Description:   [primary + secondary + long-tail keywords] ← MUST
-Image alt text: [primary keyword + visual description] ← SHOULD
-```
-
-### Step 7: Platform-Specific Formatting
-
-**Amazon:**
-```
-TITLE (200 chars max):
-[Brand] [Product Name] — [Key Feature 1], [Key Feature 2], [Key Feature 3], [Size/Color]
-
-BULLET POINTS (5, 500 chars each):
-• BENEFIT IN CAPS — Supporting detail with keyword inclusion
-• BENEFIT IN CAPS — Supporting detail with specific numbers
-...
-
-PRODUCT DESCRIPTION (2000 chars):
-[Storytelling paragraph + additional features + use cases]
-
-BACKEND KEYWORDS (250 chars):
-[comma-separated: synonyms, misspellings, related terms]
-```
-
-**Shopify:**
-```
-PRODUCT TITLE:
-[Product Name]: [Primary Benefit]
-
-SHORT DESCRIPTION (appears on collection pages):
-[1-2 sentences with primary keyword]
-
-FULL DESCRIPTION:
-[Rich HTML with headings, bullets, storytelling, and specs]
-[Use <h2>, <h3>, <ul>, <strong> for structure]
-
-META TITLE (60 chars):
-[Product Name] — [Benefit] | [Brand]
-
-META DESCRIPTION (155 chars):
-[Benefit-focused summary with CTA: "Shop now" or "Free shipping"]
-```
-
-**Etsy:**
-```
-TITLE (140 chars):
-[Descriptive, keyword-rich — Etsy searches title heavily]
-Example: "Minimalist Leather Wallet, Slim Card Holder for Men, RFID Blocking, Personalized Gift"
-
-DESCRIPTION:
-[Start with keywords in first 160 chars (used as meta description)]
-[Storytelling format works well on Etsy — craft and process story]
-[Include care instructions, shipping details, personalization options]
-
-TAGS (13 tags, 20 chars each):
-[Long-tail phrases: "slim leather wallet", "personalized gift men"]
-```
-
-### Step 8: Output
-
-Present the complete product listing:
-
-```
-━━━ PRODUCT LISTING: [Product Name] ━━━━━━
-
-── HEADLINE ───────────────────────────────
-[Platform-optimized title]
-
-── BULLET POINTS ──────────────────────────
-• [Benefit 1]: [Feature detail]
-• [Benefit 2]: [Feature detail]
-• [Benefit 3]: [Feature detail]
-• [Benefit 4]: [Feature detail]
-• [Benefit 5]: [Feature detail]
-
-── PRODUCT STORY ──────────────────────────
-[100-200 word storytelling paragraph]
-
-── SPECIFICATIONS ─────────────────────────
-[clean spec table]
-
-── SEO ────────────────────────────────────
-Primary keyword: [keyword]
-Secondary keywords: [list]
-Meta title: [title]
-Meta description: [description]
-Backend keywords: [if Amazon]
-
-── PLATFORM FORMAT ────────────────────────
-[Complete copy formatted for target platform]
-
-── CONVERSION NOTES ───────────────────────
-• Primary objection addressed: [which bullet handles it]
-• Trust signal: [guarantee, reviews, certification]
-• Urgency element: [if applicable — limited stock, seasonal]
-```
+- Product requires regulatory/compliance claims (FDA, medical, supplements) -> flag for legal review, do not write health claims
+- User wants A/B test variants -> generate 2 headline + bullet variants with rationale for each, but recommend testing tools
+- Multi-language listings -> write English first, flag that machine translation of product copy underperforms human localization
 
 ## Inputs
-- Product name, category, and features
-- Target buyer profile
+
+- Product name, category, key features (5-7)
+- Target buyer profile (demographics, pain points)
 - Price point
 - Platform (Amazon, Shopify, Etsy, own site)
 - Competitors and unique selling point
 - Target keyword (optional)
 
 ## Outputs
+
 - Benefit-led headline optimized for target platform
-- 5-7 feature → benefit bullet points
-- Storytelling paragraph (100-200 words) painting life with the product
-- Technical specifications in scannable format
-- SEO optimization (keywords, meta tags, backend keywords)
-- Platform-specific formatting (Amazon, Shopify, Etsy)
-- Complete product listing copy ready to paste
+- Feature-to-benefit bullet points (platform-appropriate count)
+- Storytelling paragraph (100-200 words)
+- Technical specifications (scannable format)
+- SEO optimization (keywords, meta tags, backend keywords where applicable)
+- Platform-specific formatted listing, paste-ready
+- Conversion notes (objection addressed, trust signal, urgency if applicable)
 
 ## Level History
 
-- **Lv.1** — Base: 4 headline formulas by platform, feature → benefit bullet point conversion, storytelling paragraph framework, technical spec template, platform-specific SEO (Amazon/Shopify/Etsy), platform-specific formatting with character limits, paste-ready listing output. (Origin: MemStack v3.2, Mar 2026)
+- **Lv.1** — Base: 4 headline formulas by platform, feature-to-benefit bullet conversion, storytelling framework, spec template, platform-specific SEO (Amazon/Shopify/Etsy), platform formatting with character limits, paste-ready output. (Origin: MemStack v3.2, Mar 2026)
+- **Lv.2** — Compressed: Creator-level density rewrite. Added validation gates, pricing context calibration, sensory/emotional language rules, A+ Content decision criteria, anti-patterns, escalation paths. Reduced from 289 to 170 lines. (Origin: MemStack v3.2, Mar 2026)

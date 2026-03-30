@@ -1,280 +1,166 @@
 ---
 name: refactor-planner
-description: "Use when the user says 'refactor', 'refactoring plan', 'code cleanup', 'tech debt', 'reduce duplication', or wants to systematically improve code quality without changing behavior."
+description: "WHAT: Identify code smells, assess risk, build incremental refactoring plan with PR strategy and regression gates. WHEN: 'refactor', 'refactoring plan', 'code cleanup', 'tech debt', 'reduce duplication'. NOT: writing new tests without refactoring (test-writer), database schema changes (migration-planner), new feature design (feature-spec)."
 ---
 
-# 🔧 Refactor Planner — Systematic Code Improvement
-*Identify refactoring targets, assess risk, and build an incremental execution plan with before/after examples and regression coverage.*
+# Refactor Planner
 
 ## Activation
 
-When this skill activates, output:
-
-`🔧 Refactor Planner — Analyzing refactoring opportunities...`
-
 | Context | Status |
 |---------|--------|
-| **User says "refactor", "refactoring plan", "code cleanup"** | ACTIVE |
-| **User wants to reduce duplication or simplify code** | ACTIVE |
-| **User mentions tech debt, god classes, or tight coupling** | ACTIVE |
-| **User wants to write tests for existing code** | DORMANT — see test-writer |
-| **User wants a database schema change** | DORMANT — see migration-planner |
-| **User wants to plan new features (not improve existing)** | DORMANT — see feature-spec |
+| "refactor", "refactoring plan", "code cleanup", "tech debt" | ACTIVE |
+| Reduce duplication, simplify, god class, tight coupling | ACTIVE |
+| Write tests only (no structural change) | DORMANT -- test-writer |
+| Database schema change | DORMANT -- migration-planner |
+| Plan new features, not improve existing | DORMANT -- feature-spec |
 
-## Protocol
+## Instructions
 
-### Step 1: Gather Inputs
+### Step 1: Scope the refactor
 
-Ask the user for:
-- **Codebase scope**: Full codebase or specific module/directory?
-- **Language/framework**: What's the tech stack?
-- **Pain points**: What feels wrong? (slow to change, bugs keep recurring, hard to understand)
-- **Test coverage**: Do tests exist? What's the coverage level?
-- **Timeline**: How much time can you dedicate to refactoring?
-- **Constraints**: Any areas that can't be touched? (legacy integrations, frozen APIs)
+Gather from user: codebase scope (full vs module), language/framework, pain points, current test coverage level, timeline, frozen areas or public API constraints.
 
-### Step 2: Identify Refactoring Targets
+**Gate:** Do not proceed without knowing test coverage and constraints. If unknown, state assumptions explicitly.
 
-Scan for common code smells and categorize:
+### Step 2: Classify code smells
 
-| Category | Smell | Detection | Impact |
-|----------|-------|-----------|--------|
-| **Duplication** | Copy-pasted logic across files | Same pattern in 3+ places | High — bugs fixed in one place, missed in others |
-| **Long Functions** | Functions > 50 lines or > 3 levels of nesting | Line count + cyclomatic complexity | Medium — hard to test, hard to understand |
-| **God Classes** | Classes with 10+ methods or 500+ lines | Size + responsibility count | High — changes here ripple everywhere |
-| **Tight Coupling** | Module A imports internals of Module B | Import analysis, circular deps | High — can't change one without breaking the other |
-| **Dead Code** | Unused functions, unreachable branches | Static analysis, grep for references | Low — noise, but safe to remove |
-| **Primitive Obsession** | Passing raw strings/numbers instead of types | Parameter lists with same types | Medium — type errors at runtime |
-| **Feature Envy** | Function uses more data from another module than its own | Cross-module data access patterns | Medium — logic in the wrong place |
-| **Shotgun Surgery** | One change requires edits in 5+ files | Git history — changes that always touch same files | High — slow velocity, error-prone |
+Scan targets and classify each into one of these categories:
 
-For each target found, document:
-```
-TARGET: [file:function or class]
-  Smell: [category]
-  Severity: [critical / high / medium / low]
-  Files affected: [count]
-  Test coverage: [covered / partial / none]
-  Evidence: [specific code pattern or metric]
-```
+| Category | Signal | Severity heuristic |
+|----------|--------|---------------------|
+| Duplication | Same pattern in 3+ places | High -- bugs fixed in one spot, missed elsewhere |
+| Complexity | Functions >50 lines or >3 nesting levels | Medium -- hard to test and understand |
+| God class | 10+ methods or 500+ lines, multiple responsibilities | High -- changes ripple everywhere |
+| Coupling | Circular deps, module importing internals of another | High -- can't change one without breaking another |
+| Dead code | Unused functions, unreachable branches | Low -- noise, safe to remove |
+| Feature envy | Function uses more data from another module than its own | Medium -- logic in wrong place |
+| Shotgun surgery | One change requires edits in 5+ files (check git history) | High -- slow velocity |
 
-### Step 3: Assess Risk Per Refactor
+Document each target: file/function, smell category, severity (critical/high/medium/low), files affected count, test coverage status, specific evidence.
 
-For each target, evaluate risk:
+**Gate:** At least one target identified. If scan finds nothing, report clean and stop.
 
-| Target | Files Touched | Test Coverage | Dependency Count | Frequency of Change | Risk Level |
-|--------|--------------|---------------|-----------------|---------------------|------------|
-| [target] | [count] | [%] | [count] | [high/med/low] | [🔴🟡🟢] |
+### Step 3: Assess risk per target
 
-**Risk scoring:**
-- 🔴 **High risk**: Touches 5+ files, low test coverage, many dependents — needs tests BEFORE refactoring
-- 🟡 **Medium risk**: Touches 2-4 files, partial coverage — refactor carefully with incremental PRs
-- 🟢 **Low risk**: Isolated change, good coverage — safe to refactor immediately
+Score each target across four dimensions:
 
-**Risk mitigation rules:**
-- No test coverage on affected code? → Write tests FIRST, then refactor
-- Circular dependency? → Break one direction first, verify, then break the other
-- Public API change? → Deprecate old, add new, migrate callers, remove old
-- Database-touching code? → Coordinate with migration-planner skill
+- **Files touched** -- 1 file (low), 2-4 (medium), 5+ (high)
+- **Test coverage** -- >80% (low), 40-80% (medium), <40% (high)
+- **Dependency count** -- 0-2 dependents (low), 3-5 (medium), 6+ (high)
+- **Change frequency** -- rarely changed (low), monthly (medium), weekly (high)
 
-### Step 4: Prioritize by Impact
+Risk decision rules:
+- Any dimension rated high AND coverage <40% --> write tests BEFORE refactoring (hard gate)
+- Circular dependency --> break one direction first, verify, then break the other
+- Public API change --> deprecate old, add new, migrate callers, remove old (4-PR minimum)
+- Database-touching code --> coordinate with migration-planner
 
-Rank refactoring targets using impact scoring:
+**Gate:** Every high-risk target must have a test-first mandate documented.
 
-| Target | Frequency of Change | Bug History | Developer Pain | Business Impact | Priority Score |
-|--------|---------------------|-------------|----------------|-----------------|---------------|
-| [target] | [high/med/low] | [bugs linked] | [complaints] | [blocks features?] | [1-10] |
+### Step 4: Prioritize by impact
 
-**Prioritization formula:**
-- Change frequency (1-3): How often does this code change? (3 = weekly)
-- Bug history (1-3): How many bugs originated here? (3 = recurring)
-- Developer pain (1-3): How much does the team complain? (3 = constant friction)
-- Business impact (1-3): Does this block feature work? (3 = actively blocking)
-- Priority Score = sum (max 12, normalize to 10)
+Score each target 1-3 on: change frequency, bug history, developer pain, business impact. Sum and normalize to 10.
 
-**Priority tiers:**
-- **P1 (8-10)**: Refactor this sprint — it's actively causing problems
-- **P2 (5-7)**: Refactor this quarter — it slows the team down
-- **P3 (1-4)**: Refactor opportunistically — improve when you're nearby
+| Tier | Score | Action |
+|------|-------|--------|
+| P1 | 8-10 | Refactor this sprint -- actively causing problems |
+| P2 | 5-7 | Refactor this quarter -- slowing the team |
+| P3 | 1-4 | Refactor opportunistically -- improve when nearby |
 
-### Step 5: Design Incremental Approach
+**Gate:** At least one P1 or P2 target required to justify a dedicated refactoring effort. If all P3, recommend boy-scout-rule approach instead of a plan.
 
-For each P1/P2 target, define the refactoring strategy:
+### Step 5: Select strategy per target
 
-**Strategy options:**
+| Strategy | When to use | Typical PR size |
+|----------|-------------|-----------------|
+| Extract function/class | Long function or god class with identifiable sub-tasks | Small-Medium |
+| Introduce interface | Tight coupling between modules | Small |
+| Consolidate duplicates | Same logic in 3+ places | Medium |
+| Strangler fig | Large legacy module -- replace incrementally behind a seam | Small per PR |
+| Parallel implementation | Critical path -- can't risk breaking it, run old and new side-by-side | Large total but safe |
 
-| Strategy | When to Use | PR Size | Risk |
-|----------|-------------|---------|------|
-| **Extract function** | Long function with identifiable sub-tasks | Small | Low |
-| **Extract class/module** | God class with distinct responsibilities | Medium | Medium |
-| **Introduce interface** | Tight coupling between modules | Small | Low |
-| **Replace conditional with polymorphism** | Long if/else or switch chains | Medium | Medium |
-| **Consolidate duplicates** | Same logic in 3+ places | Medium | Medium |
-| **Strangler fig** | Large legacy module — replace incrementally | Small per PR | Low per step |
-| **Parallel implementation** | Critical path — can't risk breaking it | Large total, but safe | Low |
+PR strategy decision:
+- Single PR: isolated change, <3 files, good coverage
+- Multi-PR sequence: 5+ files or medium/high risk. Standard sequence: (1) add tests, (2) extract/restructure, (3) migrate callers, (4) remove old code
+- Never ship a "refactor mega-PR" -- each PR must be independently shippable
 
-**Incremental PR plan:**
-```
-Refactor: [Target Name]
-
-PR 1: Add tests for current behavior
-  Files: [test files]
-  Risk: None — no behavior change
-  Review: Quick
-
-PR 2: Extract [component/function]
-  Files: [source files]
-  Risk: Low — behavior preserved, tests verify
-  Review: Standard
-
-PR 3: Update callers to use new abstraction
-  Files: [caller files]
-  Risk: Medium — multiple files changing
-  Review: Careful
-
-PR 4: Remove old code
-  Files: [cleanup files]
-  Risk: Low — dead code removal
-  Review: Quick
-```
-
-### Step 6: Before/After Examples
-
-For each refactoring target, provide concrete code examples:
-
-```
-── BEFORE ─────────────────────────────────
-
-// [file path]
-[current code showing the problem]
-
-── AFTER ──────────────────────────────────
-
-// [file path]
-[refactored code showing the improvement]
-
-── WHY BETTER ─────────────────────────────
-• [specific improvement 1: e.g., "testable in isolation"]
-• [specific improvement 2: e.g., "single responsibility"]
-• [specific improvement 3: e.g., "reusable across modules"]
-```
-
-Guidelines for before/after:
-- Show real patterns from the codebase, not generic examples
-- Keep examples focused — show the essence, not the full file
-- Explain WHY the after is better, not just HOW it's different
-- If the refactor changes an API, show the caller migration too
-
-### Step 7: Regression Test Plan
-
-For each refactoring step, define what to test:
-
-| Refactor Step | Tests to Write Before | Tests to Verify After | Regression Risk |
-|---------------|----------------------|----------------------|-----------------|
-| Extract function | Unit tests for current behavior | Same tests pass against extracted version | Low |
-| Change interface | Integration tests for all callers | All caller tests still pass | Medium |
-| Remove dead code | Verify no references exist | Smoke test full app | Low |
-| Consolidate duplicates | Tests for each duplicate's behavior | Single test covers consolidated version | Medium |
-
-**Test strategy per risk level:**
-- 🟢 **Low risk**: Existing tests + visual verification
-- 🟡 **Medium risk**: Add targeted tests before refactoring, run full suite after
-- 🔴 **High risk**: Full characterization tests before, integration tests after, manual QA on critical paths
-
-**Regression checklist per refactor PR:**
-- [ ] All existing tests pass
-- [ ] New tests written for untested affected code
-- [ ] No behavior change in public APIs (unless intentional)
-- [ ] Performance not degraded (benchmark if applicable)
-- [ ] No new circular dependencies introduced
-- [ ] Linting/type checking passes
-
-### Step 8: Execution Order
-
-Define the sequence that minimizes risk:
-
-```
-── REFACTORING ROADMAP ────────────────────
-
-Phase 1: Foundation (Week 1)
-  1. [Low-risk refactor] — builds confidence, establishes pattern
-  2. [Test backfill] — increases coverage for Phase 2 targets
-  Milestone: Coverage on critical paths ≥ 80%
-
-Phase 2: Core Improvements (Weeks 2-3)
-  3. [High-impact refactor A] — most painful code smell
-  4. [High-impact refactor B] — second most painful
-  Milestone: Velocity improvement measurable
-
-Phase 3: Cleanup (Week 4)
-  5. [Dead code removal] — reduce noise
-  6. [Final consolidation] — merge remaining duplicates
-  Milestone: Codebase health metrics improved
-```
-
-**Execution rules:**
+Scope containment rules:
 - Never refactor two tightly coupled modules simultaneously
 - Complete one refactor before starting the next
-- If a refactor reveals more work, add it to the backlog — don't scope-creep
-- Ship each PR independently — no "refactor mega-PR"
+- If a refactor reveals more work, add it to the backlog -- do not scope-creep
 - Pair refactoring with feature work when possible (boy scout rule)
 
-### Step 9: Output
+### Step 6: Define regression gates
 
-Present the complete refactoring roadmap:
+Per risk level:
+- **Low risk:** existing tests + visual verification
+- **Medium risk:** add targeted tests before refactoring, run full suite after
+- **High risk:** full characterization tests before, integration tests after, manual QA on critical paths
 
-```
-━━━ REFACTORING ROADMAP ━━━━━━━━━━━━━━━━━━
+Every refactor PR must pass: all existing tests green, new tests for previously untested affected code, no behavior change in public APIs (unless intentional), no new circular dependencies, linting/type-checking passes.
 
-── TARGETS IDENTIFIED ─────────────────────
-[target list with severity and smell type]
+### Step 7: Build phased roadmap
 
-── RISK ASSESSMENT ────────────────────────
-[risk table per target]
+Organize into phases with milestones:
+- **Phase 1 (Foundation):** low-risk refactors + test backfill to build confidence and coverage
+- **Phase 2 (Core):** P1 targets, highest-impact smells
+- **Phase 3 (Cleanup):** dead code removal, final consolidation, P2 targets
 
-── PRIORITY RANKING ───────────────────────
-P1: [targets to fix this sprint]
-P2: [targets to fix this quarter]
-P3: [targets to fix opportunistically]
+**Gate:** Each phase has a measurable milestone (e.g., "coverage on critical paths >= 80%", "velocity improvement measurable").
 
-── INCREMENTAL PR PLAN ────────────────────
-[per-target PR sequence]
+### Step 8: Output the plan
 
-── BEFORE/AFTER EXAMPLES ──────────────────
-[code examples per target]
+Deliver: targets with severity, risk assessment table, priority ranking (P1/P2/P3), per-target PR sequence, regression plan per step, phased roadmap with milestones, and success metrics.
 
-── REGRESSION TEST PLAN ───────────────────
-[test strategy per refactor step]
+## Examples
 
-── EXECUTION PHASES ───────────────────────
-Phase 1: [timeline + targets + milestone]
-Phase 2: [timeline + targets + milestone]
-Phase 3: [timeline + targets + milestone]
+**Example 1 -- Strangler fig for a god class:**
+User reports 800-line `OrderService` handling validation, pricing, notifications, and logging. Classify: god class (high). Strategy: strangler fig. PR sequence: (1) tests for current behavior, (2) extract `OrderValidator`, (3) extract `PriceCalculator`, (4) extract `OrderNotifier`, (5) slim `OrderService` to orchestrator. Each PR independently deployable.
 
-── METRICS TO TRACK ───────────────────────
-• Cyclomatic complexity (before/after)
-• Test coverage % (before/after)
-• Lines of duplicated code (before/after)
-• Average PR review time (should decrease)
-• Bug rate in refactored modules (should decrease)
-```
+**Example 2 -- Consolidate duplication across API handlers:**
+User reports identical error-handling blocks in 12 route handlers. Classify: duplication (high), shotgun surgery (high). Strategy: consolidate. PR sequence: (1) extract shared `handleApiError` middleware, (2) migrate 4 handlers per PR (3 PRs), (3) remove old inline blocks. Gate: existing integration tests must pass after each migration PR.
+
+## Common Issues
+
+- **No test coverage, user wants to refactor immediately.** Insist on characterization tests first for any medium/high risk target. For low-risk targets (dead code removal, renaming), tests-first can be relaxed.
+- **Scope creep during refactoring.** Each discovered smell goes to backlog, not current PR. Enforce the rule: one refactor per PR sequence.
+- **Refactoring changes behavior unintentionally.** This means the regression gate failed. Roll back, add the missing test that would have caught it, then retry.
+
+## Anti-Patterns
+
+- Big-bang rewrite PR that touches 50+ files -- always decompose
+- Refactoring without tests on affected code (medium/high risk targets)
+- Refactoring code that rarely changes and causes no pain (P3 without justification)
+- Mixing feature work and refactoring in the same PR (separate concerns)
+- Refactoring two coupled modules in parallel (serialize instead)
+
+## Escalation
+
+- If refactoring requires public API changes with external consumers --> escalate to API versioning strategy
+- If test coverage is <20% across the codebase --> recommend a dedicated test-writing sprint (test-writer) before any refactoring
+- If refactoring touches database schemas --> hand off to migration-planner for coordinated plan
+- If the codebase has no CI --> recommend CI setup first (ci-cd-pipeline) so regression gates are enforceable
 
 ## Inputs
+
 - Codebase scope and tech stack
 - Known pain points and problem areas
 - Current test coverage level
-- Available timeline for refactoring
-- Constraints (frozen areas, public APIs)
+- Available timeline
+- Constraints (frozen areas, public APIs, external consumers)
 
 ## Outputs
-- Categorized refactoring targets with severity ratings
-- Risk assessment per target (files touched, coverage, dependencies)
-- Priority ranking by impact (change frequency, bug history, developer pain)
-- Incremental PR plan per refactor (no big-bang rewrites)
-- Before/after code examples for each target
-- Regression test plan per refactor step
-- Phased execution roadmap with milestones and metrics
+
+- Classified targets with smell category and severity
+- Risk assessment per target (files, coverage, dependencies, change frequency)
+- Priority ranking (P1/P2/P3) with scoring rationale
+- Per-target refactoring strategy and multi-PR sequence
+- Regression test plan per step with gates
+- Phased execution roadmap with milestones
+- Success metrics: cyclomatic complexity, test coverage %, duplicated lines, PR review time, bug rate in refactored modules (all before/after)
 
 ## Level History
 
-- **Lv.1** — Base: 8-category code smell detection, risk assessment per refactor (files × coverage × dependencies), impact-based prioritization (change frequency × bug history × dev pain), incremental PR strategy (extract → migrate → remove), before/after code examples, regression test plan per step, phased execution roadmap with metrics tracking. (Origin: MemStack v3.2, Mar 2026)
+- **Lv.1** -- Base: 8-category code smell detection, risk assessment per refactor (files x coverage x dependencies), impact-based prioritization (change frequency x bug history x dev pain), incremental PR strategy (extract -> migrate -> remove), before/after code examples, regression test plan per step, phased execution roadmap with metrics tracking. (Origin: MemStack v3.2, Mar 2026)
+- **Lv.2** -- Compressed to creator-level density: decision rules only, validation gates between steps, scope containment rules, escalation paths, anti-patterns. Removed verbose code examples and templates in favor of terse strategy references. (Origin: MemStack v3.3, Mar 2026)

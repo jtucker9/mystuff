@@ -1,365 +1,147 @@
 ---
 name: contract-template
-description: "Use when the user says 'contract', 'agreement', 'service agreement', 'NDA', 'freelance contract', or wants to generate a professional service contract with legal clauses."
+description: "Generate professional service contracts. WHEN: 'contract', 'agreement', 'service agreement', 'NDA', 'freelance contract', 'retainer agreement'. NOT: invoices (invoice-generator), client onboarding processes (client-onboarding), SOW as standalone (scope-of-work)."
 ---
 
-# 📜 Contract Template — Service Agreement Generator
-*Generate professional service agreements with scope, payment terms, IP ownership, confidentiality, termination, and dispute resolution clauses.*
+# Contract Template
 
 ## Activation
 
-When this skill activates, output:
-
-`📜 Contract Template — Drafting your service agreement...`
-
 | Context | Status |
 |---------|--------|
-| **User says "contract", "agreement", "service agreement"** | ACTIVE |
-| **User wants NDA, freelance contract, or consulting agreement** | ACTIVE |
-| **User mentions IP ownership, payment terms, or termination clauses** | ACTIVE |
-| **User wants to generate an invoice (not a contract)** | DORMANT — see invoice-generator |
-| **User wants client onboarding (contract is one piece)** | DORMANT — see client-onboarding |
+| User says "contract", "agreement", "service agreement", "NDA" | ACTIVE |
+| User wants freelance, consulting, or retainer contract | ACTIVE |
+| User asks about IP ownership, termination, or payment clauses | ACTIVE |
+| User wants an invoice, not a contract | DORMANT — invoice-generator |
+| User wants full client onboarding flow | DORMANT — client-onboarding |
+| User wants a standalone scope-of-work document | DORMANT — scope-of-work |
 
-## Protocol
+Output on activation: `Contract Template — Drafting your service agreement...`
+
+## Instructions
 
 ### Step 1: Gather Inputs
 
-Ask the user for:
-- **Parties**: Your name/company and client name/company
-- **Project scope**: What work will be performed?
-- **Timeline**: Start date, end date, milestones
-- **Payment**: Total amount, payment schedule, method
-- **Work type**: Freelance, consulting, agency, SaaS development?
-- **IP preference**: Client owns all work? Shared? You retain license?
-- **Jurisdiction**: State/country for governing law
+Collect from user (ask for missing):
+- **Parties**: Provider name/company + Client name/company
+- **Scope**: Deliverables, milestones, timeline (start/end)
+- **Payment**: Amount, schedule, method
+- **Work type**: Freelance / consulting / agency / SaaS dev
+- **IP preference**: Client owns all / provider retains / split
+- **Jurisdiction**: State or country for governing law
 
-### Step 2: Choose Contract Type
+**Gate**: Must have at minimum parties, scope, and payment before proceeding.
 
-Recommend the appropriate template:
+### Step 2: Select Contract Type
 
-| Type | Best For | Key Clauses |
-|------|----------|-------------|
-| **Fixed-Price Service Agreement** | Project with defined deliverables | Scope, milestones, payment on delivery |
-| **Retainer Agreement** | Ongoing monthly work | Monthly hours, rollover policy, rate |
-| **Consulting Agreement** | Advisory/strategy work | Hourly rate, expense reimbursement |
-| **NDA (Standalone)** | Pre-engagement confidentiality | Definition of confidential info, duration |
-| **SaaS Development Agreement** | Building a software product | IP assignment, source code, hosting |
+| Type | When to Use | Key Differentiator |
+|------|-------------|-------------------|
+| Fixed-Price Service Agreement | Defined deliverables, clear end | Milestone-based payment, change order clause |
+| Retainer Agreement | Ongoing monthly work | Monthly hours, rollover policy, overage rate |
+| Consulting Agreement | Advisory/strategy (not building) | Hourly rate, expense reimbursement |
+| NDA (Standalone) | Pre-engagement confidentiality only | Confidential info definition, duration, no payment terms |
+| SaaS Development Agreement | Building a software product | Source code ownership, hosting, maintenance terms |
 
-### Step 3: Generate Service Agreement
+Decision: If user is unsure, default to Fixed-Price for project work, Retainer for ongoing relationships.
 
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-            SERVICE AGREEMENT
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+**Gate**: Contract type confirmed with user before drafting.
 
-This Service Agreement ("Agreement") is entered into as of
-[DATE] ("Effective Date") by and between:
+### Step 3: Assemble Required Clauses
 
-SERVICE PROVIDER:
-[Provider Name/Company]
-[Address]
-[Email]
-("Provider")
+Every contract (except standalone NDA) must include ALL of these sections:
 
-CLIENT:
-[Client Name/Company]
-[Address]
-[Email]
-("Client")
-```
+1. **Parties & Effective Date** — Full legal names, addresses, emails
+2. **Scope of Work** — Numbered deliverables, milestones with dates, change order provision ("written Change Order signed by both parties")
+3. **Payment Terms** — See payment pattern selection below
+4. **IP Ownership** — See IP decision tree below
+5. **Confidentiality** — Mutual obligations, standard exclusions (public info, prior knowledge, independent development, court order), survival period (2-5 years)
+6. **Termination** — See termination rules below
+7. **Liability Cap** — Total liability capped at fees paid in preceding 12 months; exclude consequential/punitive damages
+8. **Indemnification** — Provider indemnifies for IP infringement; Client indemnifies for use of deliverables and client-provided materials
+9. **Dispute Resolution** — Arbitration (AAA/JAMS) OR litigation; always require 30-day good-faith negotiation first
+10. **General Provisions** — Governing law, entire agreement, amendment process, severability, independent contractor status, force majeure
+11. **Signatures** — Both parties with date lines
 
-### Step 4: Scope of Work
+For standalone NDA: Include only Parties, Confidentiality (expanded), Term/Termination, Remedies, General Provisions, Signatures.
 
-```
-1. SCOPE OF WORK
+### Step 4: Apply Decision Trees
 
-1.1 Provider agrees to perform the following services
-    ("Services"):
+**Payment Patterns:**
+- Fixed-price: Split across milestones (e.g., 30/30/40 or 50/50). Always include deposit on signing.
+- Retainer: Monthly fee, specify included hours, rollover yes/no, overage rate.
+- Consulting: Hourly rate + expense policy (require pre-approval above threshold).
+- All types: Net-15 or Net-30 terms. Late fee of 1-1.5%/month. Provider may pause work if payment overdue 15+ days.
 
-    a) [Deliverable 1 — detailed description]
-    b) [Deliverable 2 — detailed description]
-    c) [Deliverable 3 — detailed description]
+**IP Ownership Decision Tree:**
+- Client is paying for custom work they'll own exclusively? -> Full Assignment (work-for-hire + assignment of residual rights). Provider retains portfolio use only with written consent.
+- Provider wants to reuse components/methodology? -> License model. Provider retains ownership, grants perpetual non-exclusive license on full payment.
+- SaaS or mixed (custom + provider tools)? -> Split. Client owns custom code/content. Provider retains pre-existing tools/frameworks with perpetual license to client. Open-source stays under original licenses.
 
-1.2 The Services shall be completed according to the
-    following milestones:
+**Termination Rules:**
+- Convenience termination: 15-30 days written notice by either party.
+- For-cause termination: Immediate if material breach uncured after 15 days written notice, or insolvency/bankruptcy.
+- On termination: Client pays for work completed; Provider delivers all finished work product; Confidential info returned/destroyed within 10 days.
+- Kill fee (provider protection): If client terminates without cause mid-project, client pays for completed work plus a kill fee (percentage of remaining value or 2 weeks of planned work). Negotiate this explicitly.
 
-    Milestone 1: [description] — Due: [date]
-    Milestone 2: [description] — Due: [date]
-    Milestone 3: [description] — Due: [date]
-    Final delivery: [description] — Due: [date]
+**Jurisdiction Considerations:**
+- Default to provider's state/country if both parties are domestic.
+- For international contracts: specify which country's law governs AND dispute forum location.
+- Arbitration preferred for cross-border (easier enforcement via New York Convention).
+- Always include severability clause — if one provision fails locally, the rest survives.
 
-1.3 Any work outside the scope defined in Section 1.1
-    shall require a written Change Order signed by both
-    parties, which may include adjusted timeline and fees.
+### Step 5: Generate and Present
 
-1.4 Client shall provide all necessary materials, access,
-    and feedback within [X] business days of request.
-    Delays in Client response may extend project timelines
-    proportionally.
-```
-
-### Step 5: Payment Terms
-
-```
-2. PAYMENT
-
-2.1 Total project fee: $[AMOUNT] [CURRENCY]
-
-2.2 Payment schedule:
-    a) [X]% ($[amount]) due upon signing this Agreement
-    b) [X]% ($[amount]) due upon completion of Milestone [N]
-    c) [X]% ($[amount]) due upon final delivery and acceptance
-
-    — OR for retainer —
-
-    a) $[AMOUNT] per month, due on the [X]th of each month
-    b) Includes up to [X] hours of work per month
-    c) Unused hours [do / do not] roll over to the next month
-    d) Hours exceeding the monthly allowance are billed at
-       $[RATE]/hour
-
-2.3 Payment method: [bank transfer / Stripe / PayPal / check]
-
-2.4 Invoices are due within [15/30] days of receipt.
-    Late payments incur a fee of [1.5]% per month on the
-    outstanding balance.
-
-2.5 Provider reserves the right to pause work if payment
-    is overdue by more than [15] days.
-
-2.6 Expenses: [Client will / will not] reimburse reasonable
-    expenses. Expenses over $[X] require prior written approval.
-```
-
-### Step 6: IP Ownership & Work-for-Hire
-
-```
-3. INTELLECTUAL PROPERTY
-
-    — OPTION A: Full Assignment (Client Owns All) —
-
-3.1 All work product created under this Agreement
-    ("Work Product") shall be considered "work made for
-    hire" under applicable copyright law. To the extent
-    any Work Product does not qualify as work made for
-    hire, Provider hereby assigns all right, title, and
-    interest in such Work Product to Client.
-
-3.2 Provider retains no rights to use, reproduce, or
-    display the Work Product except for portfolio purposes
-    with Client's written consent.
-
-    — OPTION B: License (Provider Retains Ownership) —
-
-3.1 Provider retains all intellectual property rights in
-    the Work Product. Upon full payment, Provider grants
-    Client a perpetual, non-exclusive, worldwide license
-    to use, modify, and display the Work Product for
-    Client's business purposes.
+Output the complete contract as formatted text. Then append:
+- **Fill-in list**: Every bracketed placeholder that needs a value
+- **Customization notes**: Which IP option chosen and why, dispute method, payment schedule summary, termination notice period + kill fee terms
+- **Disclaimer**: "This template is for informational purposes only and does not constitute legal advice. Have an attorney review before signing."
 
-3.2 Provider may reuse general techniques, knowledge,
-    and non-proprietary components in future work.
+**Gate**: Confirm with user that all placeholders have been addressed or flagged.
 
-    — OPTION C: Split (Common for SaaS) —
-
-3.1 Client owns all custom code, designs, and content
-    created specifically for Client's project.
+## Examples
 
-3.2 Provider retains ownership of pre-existing tools,
-    frameworks, and libraries used in the project
-    ("Provider Tools"). Provider grants Client a perpetual,
-    non-exclusive license to use Provider Tools as
-    incorporated in the Work Product.
+**Example 1 — Freelance Web Project**: Fixed-Price Service Agreement. 3 milestones (design, development, launch). 40/30/30 payment split. Full IP assignment. 15-day termination notice. 25% kill fee on remaining value. Provider's state jurisdiction, litigation.
 
-3.3 Open-source components remain subject to their
-    respective licenses.
-```
+**Example 2 — Ongoing Marketing Retainer**: Retainer Agreement. 20 hrs/month at $150/hr, no rollover, $175/hr overage. Provider retains IP with perpetual license to client. 30-day termination notice, no kill fee. Arbitration (AAA), provider's state law.
 
-### Step 7: Confidentiality
+## Common Issues
 
-```
-4. CONFIDENTIALITY
+1. **Missing change order clause** — Without it, scope creep has no contractual remedy. Always include "written Change Order signed by both parties" in the scope section.
+2. **IP ownership left vague** — "We'll figure it out later" causes disputes. Force an explicit selection from the three options before generating.
+3. **No kill fee for provider** — If client can terminate without cause and only pay for completed work, provider loses pipeline income. Always discuss kill fee, even if set to zero by agreement.
 
-4.1 "Confidential Information" means any non-public
-    information disclosed by either party, including but
-    not limited to: business plans, customer data, source
-    code, financial information, trade secrets, and the
-    terms of this Agreement.
+## Anti-Patterns
 
-4.2 Each party agrees to:
-    a) Use Confidential Information only for purposes of
-       this Agreement
-    b) Not disclose Confidential Information to third
-       parties without prior written consent
-    c) Protect Confidential Information with at least the
-       same care used for its own confidential information
+- Generating a contract without confirming contract type first
+- Using full IP assignment when provider has pre-existing tools incorporated (use split instead)
+- Omitting the independent contractor clause (creates employment law risk)
+- Setting confidentiality survival period to "perpetual" (many jurisdictions won't enforce; use 2-5 years)
+- Skipping the good-faith negotiation period before arbitration/litigation
 
-4.3 Exclusions. Confidential Information does not include
-    information that:
-    a) Is or becomes publicly available through no fault
-       of the receiving party
-    b) Was known to the receiving party prior to disclosure
-    c) Is independently developed without use of the
-       disclosing party's information
-    d) Is required to be disclosed by law or court order
+## Escalation
 
-4.4 This confidentiality obligation survives termination
-    of this Agreement for a period of [2/3/5] years.
-```
-
-### Step 8: Termination
-
-```
-5. TERMINATION
-
-5.1 Either party may terminate this Agreement with [15/30]
-    days' written notice.
-
-5.2 Upon termination:
-    a) Client shall pay for all Services performed through
-       the termination date
-    b) Provider shall deliver all completed Work Product
-    c) Provider shall return or destroy Client's
-       Confidential Information within [10] days
-
-5.3 Termination for Cause: Either party may terminate
-    immediately if the other party:
-    a) Materially breaches this Agreement and fails to
-       cure within [15] days of written notice
-    b) Becomes insolvent or files for bankruptcy
-
-5.4 Kill Fee: If Client terminates without cause before
-    project completion, Client shall pay [a kill fee of X%
-    of the remaining project value / for work completed
-    plus 2 weeks of planned work].
-```
-
-### Step 9: Liability, Indemnification & Disputes
-
-```
-6. LIMITATION OF LIABILITY
-
-6.1 IN NO EVENT SHALL EITHER PARTY'S TOTAL LIABILITY
-    EXCEED THE TOTAL FEES PAID OR PAYABLE UNDER THIS
-    AGREEMENT IN THE [12] MONTHS PRECEDING THE CLAIM.
-
-6.2 NEITHER PARTY SHALL BE LIABLE FOR INDIRECT, INCIDENTAL,
-    CONSEQUENTIAL, SPECIAL, OR PUNITIVE DAMAGES, REGARDLESS
-    OF THE CAUSE OF ACTION.
-
-6.3 Provider makes no warranty that Services will be
-    error-free, but will correct material defects reported
-    within [30] days of delivery at no additional cost.
-
-
-7. INDEMNIFICATION
-
-7.1 Provider indemnifies Client against third-party claims
-    arising from Provider's infringement of intellectual
-    property rights in the Work Product.
-
-7.2 Client indemnifies Provider against third-party claims
-    arising from Client's use of the Work Product or
-    Client-provided materials.
-
-
-8. DISPUTE RESOLUTION
-
-    — OPTION A: Arbitration —
-
-8.1 Any dispute arising under this Agreement shall be
-    resolved by binding arbitration in [City, State],
-    conducted by [AAA / JAMS] under its commercial rules.
-
-    — OPTION B: Litigation —
-
-8.1 Any dispute arising under this Agreement shall be
-    subject to the exclusive jurisdiction of the courts
-    of [State/Country].
-
-8.2 Before initiating formal proceedings, both parties
-    agree to attempt resolution through good-faith
-    negotiation for a period of [30] days.
-
-
-9. GENERAL PROVISIONS
-
-9.1 Governing Law: This Agreement is governed by the laws
-    of [State/Country].
-
-9.2 Entire Agreement: This Agreement constitutes the
-    entire agreement and supersedes all prior negotiations.
-
-9.3 Amendments: Modifications require written agreement
-    signed by both parties.
-
-9.4 Severability: If any provision is unenforceable, the
-    remaining provisions remain in full force.
-
-9.5 Independent Contractor: Provider is an independent
-    contractor, not an employee of Client.
-
-9.6 Force Majeure: Neither party is liable for delays
-    caused by events beyond reasonable control.
-
-
-SIGNATURES:
-
-Provider: ________________________  Date: __________
-          [Provider Name]
-
-Client:   ________________________  Date: __________
-          [Client Name]
-```
-
-### Step 10: Output
-
-Present the complete contract package:
-
-```
-━━━ CONTRACT: [Project Name] ━━━━━━━━━━━━━
-
-── CONTRACT TYPE ───────────────────────────
-Type: [fixed-price / retainer / consulting / NDA]
-Parties: [provider] ↔ [client]
-
-── FULL AGREEMENT TEXT ────────────────────
-[complete contract with all sections]
-
-── FILL-IN SECTIONS ───────────────────────
-[list of all [BRACKETED] items that need values]
-
-── CUSTOMIZATION NOTES ────────────────────
-• IP: Using [Option A/B/C] — [rationale]
-• Disputes: Using [arbitration/litigation] — [rationale]
-• Payment: [schedule summary]
-• Termination: [notice period + kill fee]
-
-── DISCLAIMER ─────────────────────────────
-This template is for informational purposes only and does
-not constitute legal advice. Have an attorney review before
-signing.
-```
+- User needs contracts for employment (not independent contractor) -> Advise consulting employment attorney; this skill covers service/contractor agreements only.
+- User operates in regulated industry (healthcare, finance, government) -> Generate template but strongly recommend sector-specific legal review.
+- User needs multi-party agreements (3+ parties) -> Generate bilateral template and advise attorney adaptation.
+- Cross-border contract with complex tax implications -> Flag tax counsel need; generate contract with jurisdiction clause but note limitations.
 
 ## Inputs
-- Party details (provider and client)
-- Project scope and deliverables
-- Payment amount, schedule, and method
-- Timeline and milestones
+
+- Party details (provider + client names, addresses, emails)
+- Project scope, deliverables, milestones, timeline
+- Payment amount, schedule, method
+- Work type (freelance / consulting / retainer / SaaS)
 - IP ownership preference
-- Jurisdiction for governing law
+- Jurisdiction (state/country)
 
 ## Outputs
-- Complete service agreement with standard legal clauses
-- Scope of work with milestones and change order provisions
-- Payment terms (fixed-price or retainer) with late fee policy
-- IP ownership section (3 options: full assignment, license, split)
-- Confidentiality/NDA section with exclusions
-- Termination conditions with notice period and kill fee
-- Limitation of liability and indemnification
-- Dispute resolution (arbitration or litigation option)
-- Fill-in-the-blank section list for customization
+
+- Complete contract with all required clauses for selected type
+- Fill-in placeholder list for customization
+- Customization notes (IP option rationale, dispute method, payment summary, termination terms)
+- Legal disclaimer
 
 ## Level History
 
-- **Lv.1** — Base: 5 contract types (fixed-price, retainer, consulting, NDA, SaaS dev), scope with change orders, payment schedules with late fees, 3-option IP ownership (assignment/license/split), confidentiality with exclusions, termination with kill fee, liability cap, indemnification, dual dispute resolution options (arbitration/litigation), fill-in-the-blank output. (Origin: MemStack v3.2, Mar 2026)
+- **Lv.1** — Base: 5 contract types, scope with change orders, payment schedules with late fees, 3-option IP ownership, confidentiality with exclusions, termination with kill fee, liability cap, indemnification, dual dispute resolution, fill-in output. (Origin: MemStack v3.2, Mar 2026)
+- **Lv.2** — Compressed: Creator-density rewrite. Replaced full contract template text with decision trees and assembly rules. Added validation gates, anti-patterns, escalation paths, jurisdiction considerations. Same coverage, ~55% fewer lines. (Origin: MemStack v3.2, Mar 2026)

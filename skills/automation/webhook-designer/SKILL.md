@@ -1,337 +1,156 @@
 ---
 name: webhook-designer
-description: "Use when the user says 'webhook', 'webhook handler', 'webhook endpoint', 'receive webhooks', 'webhook security', or needs to build a secure webhook receiver with validation and idempotency."
+description: "Design secure webhook endpoints (inbound or outbound) with signature verification, idempotency, retry semantics, and dead letter queues. WHEN: 'webhook', 'webhook handler', 'webhook endpoint', 'receive webhooks', 'webhook security', HMAC/signature verification, idempotency for event-driven systems. NOT WHEN: full n8n workflow (n8n-workflow-builder), scheduled tasks (cron-scheduler), polling-based integrations with no event source."
 ---
 
-
-# 🪝 Webhook Designer — Secure Webhook Handler
-*Build production-grade webhook endpoints with signature verification, idempotency, retry handling, and dead letter queues.*
+# Webhook Designer
 
 ## Activation
 
-When this skill activates, output:
-
-`🪝 Webhook Designer — Designing your webhook handler...`
-
 | Context | Status |
 |---------|--------|
-| **User says "webhook", "webhook handler", "webhook endpoint"** | ACTIVE |
-| **User needs to receive events from an external service** | ACTIVE |
-| **User mentions HMAC, signature verification, or idempotency** | ACTIVE |
-| **User wants to send webhooks (not receive)** | ACTIVE — design outbound delivery |
-| **User wants a full n8n workflow (webhook is just the trigger)** | DORMANT — see n8n-workflow-builder |
-| **User wants a scheduled task (not event-driven)** | DORMANT — see cron-scheduler |
+| User says "webhook", "webhook handler", "webhook endpoint" | ACTIVE |
+| User needs to receive or send events between services | ACTIVE |
+| User mentions HMAC, signature verification, idempotency | ACTIVE |
+| Full n8n workflow where webhook is just the trigger | DORMANT — n8n-workflow-builder |
+| Scheduled task, not event-driven | DORMANT — cron-scheduler |
+| Polling integration, no event source publishes hooks | DORMANT — api-integration |
 
-## Protocol
+Output on activation: `Webhook Designer — Designing your webhook handler...`
 
-### Step 1: Gather Inputs
+## Instructions
 
-Ask the user for:
-- **Event type**: What event triggers the webhook? (payment completed, form submitted, deploy finished, etc.)
-- **Source system**: Who sends it? (Stripe, GitHub, Shopify, SendGrid, custom)
-- **Target system**: What should happen when received? (update database, send notification, trigger pipeline)
-- **Payload format**: JSON? Form-encoded? Known schema?
-- **Runtime**: Express, Next.js API route, Fastify, serverless function?
+### Step 1: Classify and Gather
 
-### Step 2: Design Webhook Endpoint
+Determine direction first:
+- **Inbound**: receiving events from an external source (Stripe, GitHub, Shopify, custom)
+- **Outbound**: delivering events to subscriber endpoints
+- **Both**: building a platform that receives AND sends webhooks
 
-```javascript
-// Route: POST /api/webhooks/[source]
-// Auth: Signature verification (no bearer token)
-// Rate limit: Standard or elevated for known webhook sources
+Gather: event types, source/target system, payload format (JSON default), runtime (Express/Next.js/Fastify/serverless), security requirements.
 
-router.post('/api/webhooks/[source]', async (req, res) => {
-  // 1. Verify signature
-  // 2. Parse and validate payload
-  // 3. Check idempotency
-  // 4. Process event
-  // 5. Return 200 quickly
-});
+**Gate**: Do not proceed without knowing direction, at least one event type, and the runtime.
+
+### Step 2: Webhook vs Polling Decision
+
+Use webhooks when: source supports them, near-real-time matters, event volume is unpredictable.
+Use polling when: source has no webhook support, you need guaranteed ordering, rate limits make webhooks unreliable, or you need historical backfill.
+Hybrid: webhook for real-time + periodic polling to catch missed events.
+
+**Gate**: If polling is the better fit, redirect to api-integration skill.
+
+### Step 3: Design Endpoint and Security
+
+Route pattern: `POST /api/webhooks/{source}` — one endpoint per source system.
+
+**Signature verification** (non-negotiable for production):
+- HMAC-SHA256 with timing-safe comparison is the standard pattern
+- Use source SDK when available (e.g., `stripe.webhooks.constructEvent`)
+- Custom sources: document the signing algorithm, require HMAC minimum
+- Reject requests with missing/empty signature headers immediately
+
+**Replay prevention**: reject events with timestamps older than 5 minutes. Compare `abs(now - event_timestamp)` against threshold.
+
+**Additional layers**: HTTPS only, IP allowlisting if source publishes ranges, rate limiting even on webhook endpoints, no secrets in URL paths.
+
+**Gate**: Signature verification approach must be defined before writing handler code.
+
+### Step 4: Payload Design and Validation
+
+**Inbound**: define schema matching source API docs. Allow unknown fields (sources add fields without notice). Validate structure and types, not just presence.
+
+**Outbound** (if designing your own webhook system): follow the canonical envelope:
+```
+{ event: "resource.action", data: {...}, timestamp: ISO8601, webhook_id: unique }
 ```
 
-**Design decisions:**
-- Respond with 200 immediately, process asynchronously if > 5s work
-- Always return 200 for valid signatures (even if event is ignored)
-- Return 400 only for malformed requests, 401 for bad signatures
-- Log the raw body before any processing for debugging
+Event type taxonomy: `resource.action` format (e.g., `payment.completed`, `order.shipped`, `user.deleted`). Group by resource, use past tense for completed actions.
 
-### Step 3: Signature Verification
+**Gate**: Schema must be defined before implementing the handler.
 
-Provide code for the specific source system:
+### Step 5: Idempotency and Delivery Semantics
 
-**HMAC-SHA256 pattern (Stripe, GitHub, Shopify):**
+Webhooks are **at-least-once** delivery. Duplicates are expected. Every handler must:
+1. Extract a unique event ID from the payload (`webhook_id`, `event.id`, or header)
+2. Check a dedup table before processing (`processed_webhooks` with unique constraint on event_id)
+3. Mark as processed after successful handling (INSERT ON CONFLICT DO NOTHING)
+4. Return 200 for duplicates — do not reprocess
 
-```javascript
-const crypto = require('crypto');
+Dedup table: `event_id` (unique), `event_type`, `processed_at`, optional `payload` JSONB for debugging. Add TTL index on `processed_at`, clean records older than 30 days.
 
-function verifySignature(payload, signature, secret) {
-  const expected = crypto
-    .createHmac('sha256', secret)
-    .update(payload, 'utf8')
-    .digest('hex');
+### Step 6: Retry and Failure Handling
 
-  // Timing-safe comparison prevents timing attacks
-  return crypto.timingSafeEqual(
-    Buffer.from(signature),
-    Buffer.from(expected)
-  );
-}
-```
+**Inbound**: return 200 immediately for valid signatures. Process asynchronously if work exceeds 5 seconds. Source systems retry on non-2xx (Stripe: 3 days, GitHub: 3 days, exponential backoff).
 
-**Source-specific patterns:**
-- **Stripe**: `stripe.webhooks.constructEvent(body, sig, endpointSecret)`
-- **GitHub**: `X-Hub-Signature-256` header, `sha256=` prefix
-- **Shopify**: `X-Shopify-Hmac-SHA256` header, base64 encoding
-- **SendGrid**: Event Webhook signature verification
-- **Custom**: Document the signing algorithm used
+**Outbound**: exponential backoff with jitter, max 5 attempts, cap delay at 30 seconds. After max attempts, send to dead letter queue.
 
-**Additional security layers:**
-- Verify `Content-Type` header matches expected format
-- Reject requests with missing or empty signature headers
-- Log failed verification attempts (potential attack indicator)
+**Dead letter queue**: store failed deliveries (URL, payload, error, attempt count, timestamp). Review via admin interface or retry with separate cron job. Never silently drop events.
 
-### Step 4: Payload Validation
+### Step 7: Registration API (Outbound Only)
 
-Define the expected schema:
+If building outbound webhooks, provide a subscription API:
+- `POST /api/webhooks/subscriptions` — register URL + event types + optional secret
+- `GET /api/webhooks/subscriptions` — list active subscriptions
+- `DELETE /api/webhooks/subscriptions/{id}` — unsubscribe
+- Verify endpoint on registration (send challenge request, expect echo)
+- Store subscriber secret for per-subscriber HMAC signing
 
-```javascript
-// Zod schema example
-const WebhookPayload = z.object({
-  event: z.enum(['payment.completed', 'payment.failed', 'refund.created']),
-  data: z.object({
-    id: z.string(),
-    amount: z.number(),
-    currency: z.string().length(3),
-    customer_email: z.string().email(),
-    metadata: z.record(z.unknown()).optional(),
-  }),
-  timestamp: z.string().datetime(),
-  webhook_id: z.string(), // For idempotency
-});
+### Step 8: Logging and Testing
 
-// Validate
-const result = WebhookPayload.safeParse(req.body);
-if (!result.success) {
-  console.error('Invalid webhook payload:', result.error.issues);
-  return res.status(400).json({ error: 'Invalid payload' });
-}
-```
+**Log per event**: event_id, event_type, source, signature_valid, processing_status (success/failed/duplicate/skipped), processing_time_ms. Do NOT log full payloads in production (PII risk) — store in idempotency table only.
 
-**Validation rules:**
-- Validate structure, not just presence (type-check every field)
-- Allow unknown fields (source APIs add new fields without notice)
-- Log validation failures with the raw payload for debugging
-- Version your schema — source APIs evolve
+**Test commands**: provide curl with computed HMAC signature, test cases for invalid signature (expect 401), valid duplicate (expect 200 + already_processed), and malformed payload (expect 400).
 
-### Step 5: Idempotency Handling
+### Step 9: Deliver Output
 
-Prevent duplicate processing when webhooks are retried:
+Present: endpoint route + auth method, handler code, validation schema, idempotency migration SQL, security checklist with status, curl test commands. For outbound: add subscription API and delivery worker.
 
-```javascript
-async function isProcessed(eventId) {
-  const result = await db.query(
-    'SELECT id FROM processed_webhooks WHERE event_id = $1',
-    [eventId]
-  );
-  return result.rows.length > 0;
-}
+## Examples
 
-async function markProcessed(eventId, eventType) {
-  await db.query(
-    `INSERT INTO processed_webhooks (event_id, event_type, processed_at)
-     VALUES ($1, $2, NOW())
-     ON CONFLICT (event_id) DO NOTHING`,
-    [eventId, eventType]
-  );
-}
+**Stripe payment webhook (inbound)**: POST `/api/webhooks/stripe`, verify via `stripe.webhooks.constructEvent`, handle `payment_intent.succeeded` + `charge.refunded`, idempotency on `event.id`, return 200 immediately, queue fulfillment async.
 
-// In handler:
-if (await isProcessed(event.id)) {
-  console.log(`Duplicate webhook ignored: ${event.id}`);
-  return res.status(200).json({ status: 'already_processed' });
-}
-// ... process event ...
-await markProcessed(event.id, event.type);
-```
+**SaaS platform event delivery (outbound)**: subscriber registers URL + events via REST API, platform signs each delivery with per-subscriber HMAC-SHA256, exponential retry up to 5 attempts, dead letter queue after exhaustion, admin dashboard shows delivery status per subscriber.
 
-**Idempotency table:**
+## Common Issues
 
-```sql
-CREATE TABLE processed_webhooks (
-  id SERIAL PRIMARY KEY,
-  event_id VARCHAR(255) UNIQUE NOT NULL,
-  event_type VARCHAR(100),
-  processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  payload JSONB -- optional: store for debugging
-);
+1. **Raw body parsing**: signature verification requires the raw request body (not parsed JSON). In Express, use `express.raw({type: 'application/json'})` on the webhook route. Parsing before verification = signature mismatch.
+2. **Timeout on slow processing**: source retries because handler takes too long. Fix: return 200 immediately, process via queue/background job.
+3. **Missing idempotency**: duplicate charges, double emails, repeated side effects. Always dedup before processing, even if "it shouldn't happen."
 
--- Cleanup old records (keep 30 days)
-CREATE INDEX idx_processed_webhooks_date ON processed_webhooks(processed_at);
-```
+## Anti-Patterns
 
-### Step 6: Retry Logic
+- Putting secrets or API keys in webhook URL paths
+- Synchronous heavy processing before returning 200
+- String equality for signature comparison (timing attack vulnerable — use timing-safe compare)
+- Logging full payloads containing PII to stdout
+- Silently dropping failed outbound deliveries instead of dead-lettering
+- Trusting webhook payload without signature verification in production
 
-**Inbound retries (receiving):**
-- Source systems retry on non-2xx responses
-- Stripe: Retries up to 3 days with exponential backoff
-- GitHub: Retries for 3 days
-- Always return 200 quickly to prevent retries for successfully received events
+## Escalation
 
-**Outbound retries (if you're sending webhooks):**
-
-```javascript
-async function deliverWebhook(url, payload, attempt = 1, maxAttempts = 5) {
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(10000), // 10s timeout
-    });
-
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return { success: true, attempt };
-  } catch (err) {
-    if (attempt >= maxAttempts) {
-      await sendToDeadLetterQueue(url, payload, err.message);
-      return { success: false, attempt, error: err.message };
-    }
-
-    const delay = Math.min(1000 * Math.pow(2, attempt), 30000); // Max 30s
-    await new Promise(r => setTimeout(r, delay));
-    return deliverWebhook(url, payload, attempt + 1, maxAttempts);
-  }
-}
-```
-
-**Dead letter queue:**
-- Store failed deliveries in a table or queue
-- Include: URL, payload, error, attempt count, timestamp
-- Review and retry manually or with a separate cron job
-
-### Step 7: Logging
-
-What to log for every webhook event:
-
-```javascript
-const logEntry = {
-  webhook_id: event.id,
-  event_type: event.type,
-  source: 'stripe',
-  received_at: new Date().toISOString(),
-  signature_valid: true,
-  payload_valid: true,
-  processing_status: 'success', // or 'failed', 'skipped', 'duplicate'
-  processing_time_ms: endTime - startTime,
-  error: null, // or error message
-};
-
-console.log(JSON.stringify(logEntry));
-```
-
-**Logging levels:**
-- **INFO**: Successful processing, duplicate skipped
-- **WARN**: Unknown event type (ignored), payload validation failed
-- **ERROR**: Signature verification failed, processing error, delivery failure
-
-**DO NOT log:** Full payload in production (may contain PII). Log event ID and type only, store full payload in the idempotency table for debugging.
-
-### Step 8: Security Checklist
-
-- [ ] **Signature verification**: HMAC with timing-safe comparison
-- [ ] **Replay prevention**: Reject events older than 5 minutes (check timestamp)
-- [ ] **IP allowlisting**: Restrict to source system's IP ranges (if published)
-- [ ] **HTTPS only**: Never accept webhooks over plain HTTP
-- [ ] **Rate limiting**: Protect against abuse even on webhook endpoints
-- [ ] **No secrets in URLs**: Don't put API keys in the webhook URL path
-- [ ] **Idempotency**: Prevent duplicate processing
-- [ ] **Input validation**: Validate payload schema before processing
-- [ ] **Error isolation**: A bad webhook shouldn't crash your server
-
-**Replay prevention example:**
-
-```javascript
-const eventTimestamp = new Date(event.timestamp).getTime();
-const now = Date.now();
-const fiveMinutes = 5 * 60 * 1000;
-
-if (Math.abs(now - eventTimestamp) > fiveMinutes) {
-  console.warn('Webhook replay rejected:', event.id);
-  return res.status(401).json({ error: 'Timestamp too old' });
-}
-```
-
-### Step 9: Testing
-
-Provide curl commands to simulate webhook events:
-
-```bash
-# Generate test signature
-SECRET="whsec_test_secret"
-PAYLOAD='{"event":"payment.completed","data":{"id":"evt_123","amount":5000}}'
-SIGNATURE=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "$SECRET" | cut -d' ' -f2)
-
-# Send test webhook
-curl -X POST http://localhost:3000/api/webhooks/stripe \
-  -H "Content-Type: application/json" \
-  -H "X-Signature: $SIGNATURE" \
-  -d "$PAYLOAD"
-
-# Test invalid signature
-curl -X POST http://localhost:3000/api/webhooks/stripe \
-  -H "Content-Type: application/json" \
-  -H "X-Signature: invalid_signature" \
-  -d "$PAYLOAD"
-
-# Test duplicate (send same event twice)
-curl -X POST ... # same as above, expect "already_processed"
-```
-
-### Step 10: Output
-
-Present the complete webhook handler:
-
-```
-━━━ WEBHOOK HANDLER: [Source] Events ━━━━━━
-
-── ENDPOINT ───────────────────────────────
-Route: POST /api/webhooks/[source]
-Auth: HMAC-SHA256 signature
-Events handled: [list]
-
-── CODE ───────────────────────────────────
-[complete handler implementation]
-
-── SCHEMA ─────────────────────────────────
-[Zod or JSON Schema for payload validation]
-
-── IDEMPOTENCY TABLE ──────────────────────
-[SQL migration]
-
-── SECURITY ───────────────────────────────
-[checklist with implementation status]
-
-── TEST COMMANDS ──────────────────────────
-[curl commands for testing]
-```
+- Source system has no signing mechanism and refuses to add one: require IP allowlisting + shared secret in custom header as minimum, flag as security risk
+- Delivery failures exceed dead letter queue capacity: escalate to infrastructure (queue service like SQS/Redis), not solvable at application level alone
+- Ordering requirements across events: webhooks do not guarantee order — if ordering matters, add sequence numbers and reorder on receipt, or use polling
 
 ## Inputs
-- Event type and source system
-- Target system / processing logic
+
+- Event types and source/target system
+- Direction: inbound, outbound, or both
 - Payload format and schema
 - Runtime environment
 - Security requirements
 
 ## Outputs
-- Complete webhook handler code
-- Signature verification implementation
-- Payload validation schema (Zod/JSON Schema)
-- Idempotency table migration and handler
-- Retry logic with dead letter queue
-- Structured logging configuration
-- Security checklist with implementations
-- curl test commands for simulation
+
+- Webhook handler with signature verification
+- Payload validation schema
+- Idempotency migration and dedup logic
+- Retry strategy with dead letter queue concept
+- Security checklist
+- curl test commands
+- Subscription API (outbound only)
 
 ## Level History
 
 - **Lv.1** — Base: Secure webhook handler with HMAC signature verification (timing-safe), Zod payload validation, idempotency with dedup table, exponential backoff retry, dead letter queue, structured logging, replay prevention, security checklist, curl test commands. (Origin: MemStack v3.2, Mar 2026)
+- **Lv.2** — Compressed: Creator-level density rewrite. Decision rules only, no full implementations. Added webhook-vs-polling decision gate, outbound registration API pattern, event type taxonomy, direction classification, escalation paths, anti-patterns. (Origin: MemStack v3.2, Mar 2026)
