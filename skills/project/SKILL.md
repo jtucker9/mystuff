@@ -1,91 +1,73 @@
 ---
 name: project
-description: "Use when the user says 'save project', 'handoff', or when context is running low and state must be preserved."
+description: "Use when the user says 'save project', 'handoff', or when context is running low and state must be preserved. Do NOT use for session logging (Diary), task planning (Work), or recalling past sessions (Echo)."
 ---
 
+# Project -- Saving Project State
 
-# 💾 Project — Saving Project State...
 *Save and restore project state between CC sessions for seamless handoffs.*
 
 ## Activation
 
 When this skill activates, output:
 
-`💾 Project — Saving project state...`
+`Project -- Saving project state...`
 
-Then execute the protocol below.
+Then execute the instructions below.
 
-## Protocol
+## Instructions
 
 ### Saving (handoff):
 
 1. **Capture current state:**
-   - What was accomplished this session
-   - What's currently in progress (uncommitted changes, partial work)
-   - Open questions or decisions pending
+   - Accomplishments this session
+   - In-progress work (uncommitted changes, partial work)
+   - Open questions or pending decisions
    - Next steps in priority order
-   - Key file paths that were modified
+   - Key file paths modified
 2. **Run git status** to capture uncommitted state
 3. **Save project context to SQLite:**
    ```bash
    python C:/Projects/memstack/db/memstack-db.py set-context '{"project":"<name>","status":"active","current_branch":"<branch>","last_session_date":"<YYYY-MM-DD>","known_issues":"<issues>","backlog":"<next tasks>"}'
    ```
-4. **Also save markdown handoff** to `memory/projects/{project}-{date}.md`
-5. **Present the ready-to-paste prompt** for the next CC session
+4. **Save markdown handoff** to `memory/projects/{project}-{date}.md`
+5. **Present ready-to-paste prompt** for the next CC session
 
 ### Loading (restore):
 
-1. **Load project context from SQLite:**
-   ```bash
-   python C:/Projects/memstack/db/memstack-db.py get-context <project>
-   ```
-2. **Load recent sessions:**
-   ```bash
-   python C:/Projects/memstack/db/memstack-db.py get-sessions <project> --limit 3
-   ```
-3. **Load plan if exists:**
-   ```bash
-   python C:/Projects/memstack/db/memstack-db.py get-plan <project>
-   ```
+1. **Load project context:** `memstack-db.py get-context <project>`
+2. **Load recent sessions:** `memstack-db.py get-sessions <project> --limit 3`
+3. **Load plan if exists:** `memstack-db.py get-plan <project>`
 4. **Fallback:** Check `memory/projects/` for markdown handoffs
 5. **Present combined state** so CC can continue immediately
 
-## Inputs
-- Project name
-- Current session context (what was done, what's pending)
+## Examples
 
-## Outputs
-- Project context saved to SQLite database
-- Markdown handoff in memory/projects/ (backup)
-- Ready-to-paste prompt for next CC session
+**Example 1 -- Context running low, save handoff:**
+User: "context is running low -- save project"
+Output: Saves `memory/projects/adminstack-2026-02-18.md`, prints paste-ready prompt with accomplishments + next steps.
 
-## Example Usage
+**Example 2 -- Restoring at session start:**
+User: "restore AdminStack"
+Output: Loads DB context + last 3 sessions + active plan. Prints summary: "Last session built CC Monitor. Next: wire up WebSocket events."
 
-**User:** "context is running low — save project"
+## Common Issues
 
-```
-💾 Project — Saving project state...
+| Issue | Fix |
+|-------|-----|
+| SQLite DB not found or memstack-db.py errors | Fall back to reading/writing markdown files in `memory/projects/` |
+| Handoff prompt is too vague to resume from | Include specific file paths, branch name, and the exact next action |
 
-Saved: memory/projects/adminstack-2026-02-18.md
+## Anti-Patterns
 
---- PASTE INTO NEXT CC SESSION ---
-Working directory: C:\Projects\AdminStack
-Read C:\Projects\memstack\MEMSTACK.md
-
-Resume AdminStack. Last session completed:
-- Built CC Monitor page with auto-refresh
-- Fixed API key validation
-
-Next steps:
-1. Build cc-reporter.js script
-2. Add WebSocket updates
---- END HANDOFF ---
-```
+- Do not duplicate Diary's job -- Project saves state, Diary logs history
+- Do not include full file contents in handoffs -- list paths and what changed
+- Do not save project state automatically without the user asking
+- Do not use this skill for task tracking -- that is Work's responsibility
 
 ## Level History
 
-- **Lv.1** — Base: Session state capture and handoff generation. (Origin: MemStack v1.0, Feb 2026)
-- **Lv.2** — Enhanced: Added YAML frontmatter, activation message, template integration. (Origin: MemStack v2.0 MemoryCore merge, Feb 2026)
-- **Lv.3** — Advanced: SQLite-backed project context, combined restore from DB + sessions + plan. (Origin: MemStack v2.1 Accomplish-inspired upgrade, Feb 2026)
-
-> 💎 Pro: SessionStart hook auto-injects your last 3 sessions of context.
+- **Lv.1** -- Base: Session state capture and handoff generation. (Origin: MemStack v1.0, Feb 2026)
+- **Lv.2** -- Enhanced: Added YAML frontmatter, activation message, template integration. (Origin: MemStack v2.0, Feb 2026)
+- **Lv.3** -- Advanced: SQLite-backed project context, combined restore from DB + sessions + plan. (Origin: MemStack v2.1, Feb 2026)
+- **Lv.4** -- Guide compliance: Added negative triggers, Examples, Common Issues, Anti-Patterns. Renamed Protocol to Instructions. (Origin: MemStack v3.3, Mar 2026)

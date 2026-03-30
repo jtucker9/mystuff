@@ -1,88 +1,72 @@
 ---
 name: sight
-description: "Use when the user says 'draw', 'diagram', 'visualize', 'architecture', or needs a visual overview of code structure."
+description: "Use when the user says 'draw', 'diagram', 'visualize', 'architecture', or needs a visual overview of code structure. Do NOT use for writing code, generating documentation, or describing architecture in prose."
 ---
 
+# Sight -- The Hidden Becomes Clear
 
-# 👁️ Sight — The Hidden Becomes Clear
 *Generate Mermaid diagrams showing project architecture, schema, and data flow.*
 
 ## Activation
 
 When this skill activates, output:
 
-`👁️ Sight — The hidden becomes clear.`
+`Sight -- The hidden becomes clear.`
 
-Then execute the protocol below.
+Then execute the instructions below.
 
 ## Context Guard
 
 | Context | Status |
 |---------|--------|
-| **User asks for a diagram or visualization** | ACTIVE — generate diagram |
-| **User says "draw", "diagram", "architecture"** | ACTIVE — generate diagram |
-| **User asks to "show" or "map" the structure** | ACTIVE — generate diagram |
-| **Discussing diagrams conceptually** | DORMANT — do not activate |
-| **User is looking at existing diagrams** | DORMANT — do not activate |
+| **User asks for a diagram or visualization** | ACTIVE |
+| **User says "draw", "diagram", "architecture"** | ACTIVE |
+| **User asks to "show" or "map" the structure** | ACTIVE |
+| **Discussing diagrams conceptually** | DORMANT |
+| **User is looking at existing diagrams** | DORMANT |
 
-## Protocol
+## Instructions
 
 1. **Determine diagram type** from context:
-   - "database" / "schema" → `erDiagram`
-   - "api" / "endpoints" → `flowchart TD`
-   - "components" / "pages" → `graph TD`
-   - "architecture" / "structure" → `flowchart TD` (system overview)
-   - "flow" / "process" → `sequenceDiagram`
-
+   - "database" / "schema" -> `erDiagram`
+   - "api" / "endpoints" -> `flowchart TD`
+   - "components" / "pages" -> `graph TD`
+   - "architecture" / "structure" -> `flowchart TD` (system overview)
+   - "flow" / "process" -> `sequenceDiagram`
 2. **Scan the relevant code:**
-   - For DB: read migration files in `database/`
-   - For API: list files in `src/app/api/`
-   - For pages: list files in `src/app/`
-   - For architecture: read package.json, directory structure, configs
-
-3. **Generate Mermaid diagram** as a code block
-
+   - DB: read migration files in `database/`
+   - API: list files in `src/app/api/`
+   - Pages: list files in `src/app/`
+   - Architecture: read package.json, directory structure, configs
+3. **Generate Mermaid diagram** as a fenced code block
 4. **Optionally save** to `docs/diagrams/{name}.mermaid`
 
-## Inputs
-- What to visualize (database, API, components, architecture)
-- Project directory
+## Examples
 
-## Outputs
-- Mermaid diagram code block ready to render
-- Optional saved .mermaid file
+**Example 1 -- Database schema:**
+User: "draw the database schema"
+Output: Scans migration files, produces `erDiagram` with all tables, columns, and relationships as a Mermaid code block.
 
-## Example Usage
+**Example 2 -- API route map:**
+User: "diagram the API endpoints"
+Output: Scans `src/app/api/`, produces `flowchart TD` grouping routes by resource with HTTP methods labeled on edges.
 
-**User:** "draw the AdminStack database schema"
+## Common Issues
 
-```
-👁️ Sight — The hidden becomes clear.
+| Issue | Fix |
+|-------|-----|
+| Mermaid syntax errors when entity names contain special characters | Wrap node labels in quotes: `A["my-service (v2)"]` |
+| Diagram is too large to read | Split into sub-diagrams by domain or layer instead of one monolith |
 
-​```mermaid
-erDiagram
-    accounts ||--o{ organizations : "has"
-    accounts ||--o{ cc_sessions : "tracks"
-    organizations ||--o{ projects : "contains"
-    organizations ||--o{ contacts : "stores"
-    organizations ||--o{ orders : "processes"
+## Anti-Patterns
 
-    accounts {
-        uuid id PK
-        text email
-        boolean is_platform_admin
-    }
-    cc_sessions {
-        uuid id PK
-        text name
-        text status
-    }
-​```
-```
+- Do not generate diagrams without scanning the actual codebase first
+- Do not describe architecture in prose when the user asked for a diagram
+- Do not create PNG/SVG exports -- output Mermaid source; the user renders it
+- Do not invent tables, routes, or components not found in the code
 
 ## Level History
 
-- **Lv.1** — Base: Mermaid diagram generation from codebase analysis. (Origin: MemStack v1.0, Feb 2026)
-- **Lv.2** — Enhanced: Added YAML frontmatter, context guard, activation message, diagram type detection. (Origin: MemStack v2.0 MemoryCore merge, Feb 2026)
-
-> 💎 Pro: PostToolUse hook auto-logs this work to your observation history.
+- **Lv.1** -- Base: Mermaid diagram generation from codebase analysis. (Origin: MemStack v1.0, Feb 2026)
+- **Lv.2** -- Enhanced: Added YAML frontmatter, context guard, activation message, diagram type detection. (Origin: MemStack v2.0, Feb 2026)
+- **Lv.3** -- Guide compliance: Added negative triggers, Examples, Common Issues, Anti-Patterns. Renamed Protocol to Instructions. (Origin: MemStack v3.3, Mar 2026)
