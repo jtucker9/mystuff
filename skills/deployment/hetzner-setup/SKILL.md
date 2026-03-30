@@ -1,271 +1,149 @@
 ---
 name: hetzner-setup
-description: "Use when the user says 'Hetzner', 'VPS', 'server setup', 'cloud server', 'dedicated server', or needs to provision and configure a Hetzner Cloud server with SSH hardening, reverse proxy, SSL, and monitoring. Do NOT use for managed platforms like Railway or Netlify."
+description: "Provision and harden a Hetzner Cloud server. WHEN: 'Hetzner', 'VPS setup', 'dedicated server', 'cloud server provision'. NOT WHEN: managed platforms (Railway, Netlify), Docker-only tasks, Kubernetes clusters."
 ---
 
-# 🖥️ Hetzner Setup — VPS Provisioning & Configuration
-*Provision a Hetzner Cloud server with security hardening, reverse proxy, SSL, Docker, databases, monitoring, and automated backups.*
+# Hetzner Setup — VPS Provisioning & Configuration
 
 ## Activation
 
-When this skill activates, output:
-
-`🖥️ Hetzner Setup — Provisioning and configuring your server...`
-
 | Context | Status |
 |---------|--------|
-| **User says "Hetzner", "VPS", "cloud server"** | ACTIVE |
-| **User wants to deploy to a VPS** | ACTIVE |
-| **User wants managed platform deploy** | DORMANT — see railway-deploy or netlify-deploy |
-| **User wants Docker containers specifically** | DORMANT — see docker-setup |
+| User says "Hetzner", "VPS", "cloud server", "provision server" | ACTIVE |
+| User wants managed platform deploy | DORMANT — use railway-deploy or netlify-deploy |
+| User wants Docker containers only (no server provisioning) | DORMANT — use docker-setup |
+| User wants Kubernetes on Hetzner | ESCALATE |
 
-## Protocol
+Output on activation: `Hetzner Setup — Provisioning and configuring your server...`
 
-### Step 1: Choose Server
+## Instructions
 
-| Type | vCPU | RAM | Storage | Cost/mo | Use Case |
-|------|------|-----|---------|---------|----------|
-| CX22 | 2 | 4GB | 40GB | ~€4 | Small apps, staging |
-| CX32 | 4 | 8GB | 80GB | ~€7 | Production API, small SaaS |
-| CX42 | 8 | 16GB | 160GB | ~€15 | Medium traffic, DB + app |
-| CAX21 (ARM) | 4 | 8GB | 80GB | ~€5 | Budget production (ARM native) |
-| CAX31 (ARM) | 8 | 16GB | 160GB | ~€9 | Best value for compute |
+### Step 1: Server Selection
 
-```bash
-# Create via CLI
-hcloud server create \
-  --name myapp-prod \
-  --type cx32 \
-  --image ubuntu-24.04 \
-  --location nbg1 \
-  --ssh-key my-key
-```
+**Type decision tree:**
 
-### Step 2: Initial Server Hardening
+| Need | Type | Why |
+|------|------|-----|
+| Budget dev/staging | CX (shared Intel) | Cheapest, burstable |
+| Budget production | CAX (shared ARM) | Best price-to-performance if app supports ARM |
+| Consistent CPU workloads | CPX (shared AMD) | Better single-thread than CX at similar cost |
+| DB-heavy, latency-sensitive | CCX (dedicated vCPU) | No noisy neighbors, guaranteed CPU |
 
-```bash
-# Connect
-ssh root@<server-ip>
+**Location rules:**
+- EU users: `nbg1` (Nuremberg) or `fsn1` (Falkenstein) — lowest latency to DACH region
+- US users: `ash` (Ashburn) — only US location
+- Asia-Pacific users: `sin1` (Singapore) — only APAC location
+- Compliance constraint overrides proximity
 
-# Update system
-apt update && apt upgrade -y
+**Gate:** Server type and location confirmed before proceeding.
 
-# Create deploy user (no root SSH)
-adduser deploy
-usermod -aG sudo deploy
+### Step 2: Security Hardening
 
-# Copy SSH key to deploy user
-mkdir -p /home/deploy/.ssh
-cp ~/.ssh/authorized_keys /home/deploy/.ssh/
-chown -R deploy:deploy /home/deploy/.ssh
-chmod 700 /home/deploy/.ssh
-chmod 600 /home/deploy/.ssh/authorized_keys
+Checklist — all items mandatory:
 
-# Harden SSH
-cat >> /etc/ssh/sshd_config << 'EOF'
-PermitRootLogin no
-PasswordAuthentication no
-PubkeyAuthentication yes
-MaxAuthTries 3
-AllowUsers deploy
-EOF
-systemctl restart sshd
+- [ ] Non-root deploy user with sudo
+- [ ] SSH key-only auth (`PasswordAuthentication no`, `PermitRootLogin no`, `MaxAuthTries 3`)
+- [ ] UFW: deny incoming default, allow 22/80/443 only
+- [ ] fail2ban installed and enabled
+- [ ] Unattended security upgrades enabled (`unattended-upgrades` package)
+- [ ] SSH restarted and verified from a second terminal before closing root session
 
-# Firewall
-ufw default deny incoming
-ufw default allow outgoing
-ufw allow 22/tcp    # SSH
-ufw allow 80/tcp    # HTTP
-ufw allow 443/tcp   # HTTPS
-ufw enable
+**Gate:** Verify SSH login as deploy user from a separate session. Do not proceed until confirmed — locking yourself out requires console access.
 
-# Fail2ban for brute force protection
-apt install -y fail2ban
-systemctl enable fail2ban
-```
+### Step 3: Reverse Proxy Selection
 
-### Step 3: Install Docker
+| Condition | Choice |
+|-----------|--------|
+| Single app, minimal config, auto-SSL desired | **Caddy** — zero-config HTTPS, lowest maintenance |
+| Multiple apps, need fine-grained control, existing nginx experience | **nginx** + certbot |
+| Docker-native routing, dynamic service discovery needed | **Traefik** — integrates with Docker labels |
 
-```bash
-# Official Docker install
-curl -fsSL https://get.docker.com | sh
-usermod -aG docker deploy
+Configure chosen proxy to terminate SSL and forward to app port. Verify HTTPS works before proceeding.
 
-# Install Docker Compose plugin
-apt install -y docker-compose-plugin
+**Gate:** `curl -I https://yourdomain.com` returns 200 or valid redirect.
 
-# Verify
-docker --version
-docker compose version
-```
+### Step 4: Application Deployment
 
-### Step 4: Reverse Proxy (Caddy — recommended)
+Deploy via Docker Compose (preferred) or systemd service. Set env vars from `.env` file, not hardcoded. Confirm app responds behind reverse proxy.
 
-```bash
-# Install Caddy
-apt install -y debian-keyring debian-archive-keyring apt-transport-https
-curl -1sLf 'https://dl.cloudflare.com/apt/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-curl -1sLf 'https://dl.cloudflare.com/apt/sources.list.d/caddy-stable.list' | tee /etc/apt/sources.list.d/caddy-stable.list
-apt update && apt install -y caddy
-```
+**Gate:** Application health endpoint returns expected response through the public URL.
 
-```
-# /etc/caddy/Caddyfile
-example.com {
-    reverse_proxy localhost:3000
-    encode gzip
-    log {
-        output file /var/log/caddy/access.log
-    }
-}
+### Step 5: Backup Strategy
 
-api.example.com {
-    reverse_proxy localhost:8000
-}
-```
+| Layer | Method | Retention |
+|-------|--------|-----------|
+| Database | Cron dump + gzip, daily | 7 days local |
+| Filesystem | Hetzner automated backups (paid) or snapshot before major changes | Per policy |
+| Off-site | Sync backup dir to Hetzner Object Storage or external S3 | 30 days |
 
-```bash
-sudo systemctl reload caddy
-# Caddy automatically gets and renews SSL certificates
-```
+**Gate:** Run backup script manually once and verify restore works.
 
-### Step 5: Deploy Application
+### Step 6: Monitoring
 
-```bash
-# As deploy user
-su - deploy
-mkdir -p /opt/app && cd /opt/app
+- **Minimum:** Disk usage alert (cron check > 85%), container health via `docker ps`
+- **Recommended:** Uptime probe (UptimeRobot, Hetrixtools free tier), log aggregation
+- **Production:** Prometheus + Grafana stack, or Hetzner Cloud metrics API
 
-# Clone your repo
-git clone https://github.com/user/repo.git .
+### Step 7: Hetzner-Specific Features
 
-# Create .env
-cp .env.example .env
-nano .env  # Set production values
+Apply only when needed — do not over-provision:
 
-# Start with Docker Compose
-docker compose -f docker-compose.prod.yml up -d
+| Feature | When to use |
+|---------|-------------|
+| **Floating IPs** | Zero-downtime server migration, failover between servers |
+| **Volumes** | Data persistence independent of server lifecycle, or storage beyond server disk |
+| **Load Balancers** | Multiple app servers, SSL termination at LB level |
+| **Hetzner Firewall** | Network-level rules before traffic hits server (complement to UFW, not replacement) |
 
-# View logs
-docker compose logs -f app
-```
+## Examples
 
-**Systemd service (for non-Docker apps):**
-```ini
-# /etc/systemd/system/myapp.service
-[Unit]
-Description=My Application
-After=network.target
+**1. Budget SaaS API (Node.js, Postgres, < 1k users):**
+CAX21 (ARM) in `nbg1`, Caddy reverse proxy, Docker Compose with app + postgres containers, daily DB dump to Hetzner Volume, UptimeRobot ping. Total: ~EUR 7/mo.
 
-[Service]
-Type=simple
-User=deploy
-WorkingDirectory=/opt/app
-ExecStart=/usr/bin/node dist/index.js
-Restart=on-failure
-RestartSec=5
-Environment=NODE_ENV=production
+**2. Multi-service production (3 services, dedicated CPU needed):**
+CCX23 in `ash`, Traefik reverse proxy with Docker labels, Hetzner Firewall + UFW, automated backups to Object Storage, Prometheus + Grafana monitoring. Floating IP reserved for future migration.
 
-[Install]
-WantedBy=multi-user.target
-```
+## Common Issues
 
-```bash
-sudo systemctl enable myapp
-sudo systemctl start myapp
-```
-
-### Step 6: Automated Backups
-
-```bash
-# Database backup script
-cat > /opt/scripts/backup.sh << 'SCRIPT'
-#!/bin/bash
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-BACKUP_DIR=/opt/backups
-
-mkdir -p $BACKUP_DIR
-docker exec postgres pg_dump -U postgres myapp | gzip > "$BACKUP_DIR/db_$TIMESTAMP.sql.gz"
-
-# Keep last 7 days
-find $BACKUP_DIR -name "*.gz" -mtime +7 -delete
-
-echo "Backup complete: db_$TIMESTAMP.sql.gz"
-SCRIPT
-chmod +x /opt/scripts/backup.sh
-
-# Cron: daily at 2 AM
-echo "0 2 * * * /opt/scripts/backup.sh" | crontab -
-```
-
-### Step 7: Monitoring
-
-```bash
-# Simple monitoring with htop and logging
-apt install -y htop
-
-# Docker container health
-docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-
-# Disk usage alert (add to cron)
-USAGE=$(df / | tail -1 | awk '{print $5}' | tr -d '%')
-if [ "$USAGE" -gt 85 ]; then echo "⚠️ Disk usage at ${USAGE}%"; fi
-```
-
-### Step 8: Output
-
-```
-━━━ HETZNER SERVER SETUP ━━━━━━━━━━━━━━━━
-
-── SERVER ────────────────────────────────
-Type: [CX32]
-IP: [x.x.x.x]
-Location: [nbg1]
-OS: Ubuntu 24.04
-
-── SECURITY ──────────────────────────────
-SSH: Key-only, root disabled, fail2ban active
-Firewall: UFW (22, 80, 443 only)
-
-── SERVICES ──────────────────────────────
-Reverse Proxy: Caddy (auto-SSL)
-Application: Docker Compose
-Database: [if applicable]
-
-── ACCESS ────────────────────────────────
-SSH: ssh deploy@<ip>
-App: https://example.com
-```
+- **Locked out after SSH hardening:** Always test new SSH config from a second terminal before closing root session. Recovery requires Hetzner console access.
+- **ARM compatibility:** Some Docker images lack ARM builds. Check before choosing CAX. Use `docker manifest inspect` to verify multi-arch support.
+- **Disk fills silently:** Docker logs and unused images accumulate. Add `docker system prune` to weekly cron and monitor disk usage.
 
 ## Anti-Patterns
 
-- **Running as root**: Always create a deploy user with sudo.
-- **Password SSH**: Disable immediately. Key-only authentication.
-- **No firewall**: UFW takes 30 seconds and prevents most drive-by attacks.
-- **No backups**: Hetzner snapshots cost extra but manual DB dumps are free. Do both.
-- **Hardcoding server IP in deploy scripts**: Use DNS or environment variables.
+- Running production as root
+- Password-based SSH on public servers
+- No firewall on a public-facing VPS
+- No backups — Hetzner does not back up by default
+- Hardcoding server IPs in deploy scripts — use DNS or env vars
+- Over-provisioning Hetzner features (floating IPs, LBs) before traffic justifies them
 
 ## Escalation
 
 Hand off when:
-- High-availability setup needed (load balancer, multiple servers)
-- Hetzner dedicated servers with custom networking
-- Kubernetes cluster setup on Hetzner
-- Complex firewall rules beyond UFW
+- Multi-server HA with automated failover required
+- Kubernetes cluster provisioning on Hetzner
+- Custom networking (VPN mesh, private subnets across locations)
+- Hetzner dedicated (bare metal) servers with RAID configuration
 
 ## Inputs
-- Application type and requirements
-- Expected traffic/resource needs
-- Domain (if ready)
-- Budget constraints
+
+- Application type, runtime, and resource requirements
+- Expected traffic and growth trajectory
+- Domain name (if ready)
+- Budget constraint
+- Compliance or data residency requirements
 
 ## Outputs
-- Server provisioning commands
-- Security hardening scripts
-- Reverse proxy configuration
-- Docker/systemd deployment setup
-- Backup and monitoring scripts
+
+- Server type and location recommendation with rationale
+- Security hardening verification report
+- Reverse proxy selection and SSL confirmation
+- Deployment method and health check results
+- Backup schedule and restore verification
+- Monitoring approach summary
 
 ## Level History
 
-- **Lv.1** — Base: Server selection guide, hardening script (SSH, UFW, fail2ban), Docker install, Caddy reverse proxy with auto-SSL, deploy workflow, backup cron, basic monitoring. (Origin: MemStack v3.3, Mar 2026)
+- **Lv.1** — Base: Server selection, hardening, Docker, Caddy, deploy workflow, backup cron, basic monitoring. (Origin: MemStack v3.3, Mar 2026)
+- **Lv.2** — Compressed: Decision-tree format, validation gates, server type taxonomy (CX/CPX/CAX/CCX), reverse proxy decision matrix, Hetzner-specific features table, unattended upgrades added to hardening checklist. Removed raw commands per creator-density rules. (Origin: MemStack v3.4, Mar 2026)

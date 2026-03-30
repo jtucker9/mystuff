@@ -1,266 +1,146 @@
 ---
 name: docker-setup
-description: "Use when the user says 'Docker', 'Dockerfile', 'docker-compose', 'containerize', 'docker setup', or needs to containerize an application with optimized images and compose configs. Do NOT use for CI/CD pipelines (see ci-cd-pipeline) or serverless deployments (see netlify-deploy)."
+description: "Containerize applications with optimized multi-stage Dockerfiles, compose configs, and security hardening. Activates on 'Docker', 'Dockerfile', 'docker-compose', 'containerize'. NOT for CI/CD pipelines (ci-cd-pipeline), serverless deploys (netlify-deploy), or Kubernetes orchestration."
 ---
 
-# 🐳 Docker Setup — Containerization & Orchestration
-*Generate optimized Dockerfiles, docker-compose configurations, and production-ready container setups with multi-stage builds, health checks, and security hardening.*
+# Docker Setup
 
 ## Activation
 
-When this skill activates, output:
-
-`🐳 Docker Setup — Containerizing your application...`
-
 | Context | Status |
 |---------|--------|
-| **User says "Docker", "Dockerfile", "containerize"** | ACTIVE |
-| **User says "docker-compose", "multi-container"** | ACTIVE |
-| **User wants CI/CD pipeline design** | DORMANT — see ci-cd-pipeline |
-| **User wants static site deploy** | DORMANT — see netlify-deploy |
+| "Docker", "Dockerfile", "containerize", "docker-compose" | ACTIVE |
+| CI/CD pipeline design | DORMANT — ci-cd-pipeline |
+| Static site / serverless deploy | DORMANT — netlify-deploy |
+| Kubernetes, Helm, Swarm orchestration | ESCALATE |
 
-## Protocol
+## Instructions
 
 ### Step 1: Gather Inputs
 
-- **Application type**: Web server, API, worker, full-stack with DB?
-- **Language/runtime**: Node.js, Python, Go, Rust, etc.
-- **Services needed**: PostgreSQL, Redis, etc.?
-- **Environment**: Development, production, or both?
-- **Registry**: GHCR, Docker Hub, ECR, self-hosted?
+Determine before generating anything:
+- **Runtime**: Node.js, Python, Go, Rust, etc.
+- **App type**: Web server, API, worker, full-stack w/ DB
+- **Services**: PostgreSQL, Redis, message queue, etc.
+- **Environments**: Dev only, prod only, or both
+- **Registry**: GHCR, Docker Hub, ECR, self-hosted
 
-### Step 2: Multi-Stage Dockerfiles
+**Gate**: Do not proceed without runtime and app type confirmed.
 
-**Node.js (production optimized):**
-```dockerfile
-# Stage 1: Dependencies
-FROM node:20-alpine AS deps
-WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci --only=production
+### Step 2: Generate Multi-Stage Dockerfile
 
-# Stage 2: Build
-FROM node:20-alpine AS build
-WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
+Three-stage pattern: `deps` -> `build` -> `production`.
 
-# Stage 3: Production
-FROM node:20-alpine AS production
-RUN addgroup -g 1001 appgroup && adduser -u 1001 -G appgroup -s /bin/sh -D appuser
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=build /app/dist ./dist
-COPY package.json ./
-USER appuser
-EXPOSE 3000
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
-CMD ["node", "dist/index.js"]
-```
+| Stage | Purpose | What stays |
+|-------|---------|------------|
+| deps | Install production dependencies only | Runtime deps |
+| build | Install all deps, compile/transpile | Build artifacts |
+| production | Copy only runtime deps + artifacts | Minimal runtime |
 
-**Python (FastAPI/Django):**
-```dockerfile
-FROM python:3.12-slim AS base
-RUN groupadd -r appgroup && useradd -r -g appgroup appuser
-WORKDIR /app
+Decision rules per runtime:
+- **Node**: Alpine base, `npm ci --only=production` in deps, `npm ci` + `npm run build` in build, copy `node_modules` from deps + `dist` from build into production
+- **Python**: Slim base, `pip install --no-cache-dir` in deps, copy `site-packages` + `bin` into production
+- **Go**: Alpine build stage, `CGO_ENABLED=0` + `-ldflags="-s -w"`, final stage `FROM scratch` with CA certs copied
 
-FROM base AS deps
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+Every production stage must include: non-root user creation, `USER` directive, `EXPOSE`, `HEALTHCHECK`, `CMD`.
 
-FROM base AS production
-COPY --from=deps /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
-COPY --from=deps /usr/local/bin /usr/local/bin
-COPY . .
-USER appuser
-EXPOSE 8000
-HEALTHCHECK --interval=30s --timeout=3s CMD curl -f http://localhost:8000/health || exit 1
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
+**Gate**: Verify Dockerfile builds clean (`docker build .`) before proceeding.
 
-**Go (tiny final image):**
-```dockerfile
-FROM golang:1.22-alpine AS build
-WORKDIR /app
-COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
+### Step 3: Generate Compose Configs
 
-FROM scratch
-COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=build /server /server
-EXPOSE 8080
-ENTRYPOINT ["/server"]
-```
+Dev vs prod compose differences:
 
-### Step 3: Docker Compose
+| Concern | Development | Production |
+|---------|-------------|------------|
+| Build target | `deps` stage | `production` stage |
+| Volumes | Bind-mount source + anonymous volume for `node_modules` | None (image is self-contained) |
+| Command | `npm run dev` / hot-reload | Default CMD from Dockerfile |
+| Restart | Not set | `unless-stopped` |
+| Resource limits | Not set | `memory`, `cpus` under `deploy.resources.limits` |
+| Logging | Default | `json-file` with `max-size` + `max-file` |
+| Env | Inline `environment` | `env_file` reference |
+| Ports (DB/cache) | Exposed to host | Internal only |
 
-**Development with hot reload:**
-```yaml
-# docker-compose.yml
-services:
-  app:
-    build:
-      context: .
-      target: deps  # Use dependency stage for dev
-    volumes:
-      - .:/app
-      - /app/node_modules  # Don't overwrite container node_modules
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=development
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/myapp
-    depends_on:
-      db:
-        condition: service_healthy
-    command: npm run dev
+Service dependency ordering: use `depends_on` with `condition: service_healthy`. Every service (DB, cache) must define a `healthcheck`.
 
-  db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: myapp
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+Healthcheck patterns:
+- PostgreSQL: `pg_isready -U postgres`
+- Redis: `redis-cli ping`
+- App: `wget --spider http://localhost:PORT/health || exit 1`
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
+**Gate**: `docker compose config` validates without errors.
 
-volumes:
-  pgdata:
-```
+### Step 4: Generate .dockerignore
 
-**Production:**
-```yaml
-# docker-compose.prod.yml
-services:
-  app:
-    build:
-      context: .
-      target: production
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=production
-    env_file:
-      - .env.production
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-```
+Exclude: `node_modules`, `.git`, `.env*`, `dist`, `coverage`, `.github`, `*.md`, `docker-compose*`, `Dockerfile*`, `.dockerignore`.
 
-### Step 4: Image Size Optimization
+### Step 5: Image Size Optimization
 
-| Technique | Savings |
-|-----------|---------|
-| Alpine base images | 50-80% vs Debian |
-| Multi-stage builds | 60-90% (no build tools in final) |
-| `.dockerignore` | Prevents bloat from node_modules, .git |
-| `--no-cache-dir` (pip) | 10-20% for Python |
-| `CGO_ENABLED=0` + `scratch` (Go) | 95%+ (5-15MB final) |
-| `npm ci --only=production` | 30-60% fewer node_modules |
+| Technique | Typical savings | When to apply |
+|-----------|----------------|---------------|
+| Alpine base images | 50-80% vs Debian | Always (unless native deps need glibc) |
+| Multi-stage builds | 60-90% | Always for production |
+| `--no-cache-dir` (pip) | 10-20% | Python projects |
+| `CGO_ENABLED=0` + `scratch` | 95%+ (5-15MB final) | Go projects |
+| `npm ci --only=production` | 30-60% fewer modules | Node projects |
+| `.dockerignore` | Prevents context bloat | Always |
 
-**Essential .dockerignore:**
-```
-node_modules
-.git
-.env*
-dist
-coverage
-.github
-*.md
-docker-compose*
-Dockerfile*
-.dockerignore
-```
+### Step 6: Security Hardening
 
-### Step 5: Security Hardening
-
-- **Non-root user**: Always `USER appuser` in production images
-- **Read-only filesystem**: `docker run --read-only` where possible
-- **No unnecessary packages**: Don't install curl/wget in prod unless needed for healthcheck
-- **Pin base image digests** for reproducibility: `FROM node:20-alpine@sha256:abc...`
+Mandatory for every production image:
+- **Non-root user**: Create group + user, `USER appuser` before CMD
+- **Read-only filesystem**: Run with `--read-only` where possible
+- **Pin base image digests**: `FROM node:20-alpine@sha256:abc...` for reproducibility
+- **No unnecessary packages**: Skip curl/wget in prod unless healthcheck requires it
 - **Scan images**: `trivy image myapp:latest` or `docker scout cves myapp:latest`
+- **Never hardcode secrets**: Use `env_file` or Docker secrets, never `ENV SECRET=value`
 
-### Step 6: Output
+**Gate**: `trivy image` scan shows no critical/high vulnerabilities.
 
-```
-━━━ DOCKER SETUP ━━━━━━━━━━━━━━━━━━━━━━━━
+## Examples
 
-── FILES GENERATED ───────────────────────
-Dockerfile (multi-stage, optimized)
-docker-compose.yml (development)
-docker-compose.prod.yml (production)
-.dockerignore
+**1. Node.js API + Postgres**: 3-stage Dockerfile (deps/build/production) on `node:20-alpine`, compose with `db` (postgres:16-alpine) + `redis` (redis:7-alpine), healthchecks on all services, dev compose bind-mounts source with anonymous `node_modules` volume.
 
-── IMAGE DETAILS ─────────────────────────
-Base: [image]
-Final size: ~[X]MB
-Stages: [N]
-User: non-root
+**2. Go microservice**: 2-stage Dockerfile (build on `golang:1.22-alpine`, production `FROM scratch`), CA certs copied from build stage, single-binary ~10MB image, no compose needed for standalone deploy.
 
-── COMMANDS ──────────────────────────────
-Dev:  docker compose up
-Prod: docker compose -f docker-compose.prod.yml up -d
-Build: docker build -t myapp .
-Scan: trivy image myapp:latest
-```
+## Common Issues
+
+- **Build context too large**: Missing or incomplete `.dockerignore` — check that `.git` and `node_modules` are excluded.
+- **Container exits immediately**: `CMD` runs a process that backgrounds itself — use exec form `["node", "app.js"]` not shell form.
+- **Health check fails on startup**: Increase `--start-period` to give the app time to initialize before health checks count.
 
 ## Anti-Patterns
 
-- **Running as root in containers**: Always create and switch to a non-root user.
-- **Using `latest` tag in production**: Pin specific versions for reproducibility.
-- **Copying everything with `COPY . .` without `.dockerignore`**: Bloats images with .git, node_modules, etc.
-- **Installing dev dependencies in production image**: Use multi-stage builds to separate.
-- **Hardcoding secrets in Dockerfile**: Use `env_file` or Docker secrets, never `ENV SECRET=value`.
-- **Single-stage Dockerfiles**: Always use multi-stage for production. Build tools don't belong in runtime images.
+- Running as root in production containers
+- Using `latest` tag in production (pin versions)
+- `COPY . .` without `.dockerignore`
+- Dev dependencies in production image (use multi-stage)
+- Single-stage Dockerfiles for production
+- Hardcoded secrets in Dockerfile `ENV` directives
 
 ## Escalation
 
 Hand off when:
-- Kubernetes orchestration is needed (Helm charts, pod autoscaling)
-- Complex networking across multiple hosts (Docker Swarm, overlay networks)
-- GPU workloads or specialized hardware access in containers
-- Custom base images for compliance/security requirements
+- Kubernetes orchestration needed (Helm charts, pod autoscaling)
+- Complex multi-host networking (overlay networks, service mesh)
+- GPU workloads or specialized hardware access
+- Custom compliance base images required
 
 ## Inputs
-- Application type and language
+
+- Application runtime and type
 - Required services (DB, cache, queue)
-- Environment (dev/prod/both)
+- Target environments (dev/prod/both)
 - Registry preference
 
 ## Outputs
+
 - Multi-stage Dockerfile
-- docker-compose.yml (dev and prod)
+- docker-compose.yml (dev) + docker-compose.prod.yml (prod) if both requested
 - .dockerignore
-- Build and run commands
-- Security scanning guidance
+- Build/run commands and scan guidance
 
 ## Level History
 
 - **Lv.1** — Base: Multi-stage Dockerfiles for Node/Python/Go, dev and prod compose configs, image optimization techniques, security hardening, .dockerignore templates. (Origin: MemStack v3.3, Mar 2026)
+- **Lv.2** — Compressed: Replaced full Dockerfile/compose examples with decision rules and pattern tables. Preserved multi-stage concept, optimization table, security rules, healthcheck patterns, dev/prod differences, dependency ordering. (Origin: MemStack v3.4, Mar 2026)

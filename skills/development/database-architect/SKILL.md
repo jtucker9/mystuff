@@ -1,1264 +1,201 @@
 ---
 name: database-architect
-description: "Use when the user says 'design database', 'create tables', 'database schema', 'data model', 'ERD', or is designing PostgreSQL/Supabase table structures, relationships, RLS policies, or migrations. Do NOT use for migrating existing schemas (see migration-planner) or API design (see api-designer)."
+description: "Design PostgreSQL/Supabase schemas with entity modeling, naming conventions, relationships, indexing, RLS, and migration-ready output. Activate for 'design database', 'create tables', 'database schema', 'data model', 'ERD'. Do NOT activate for altering existing schemas (migration-planner), API route design (api-designer), or auditing existing RLS (rls-checker/rls-guardian)."
 ---
 
-# 🏗️ Database Architect — Schema Design & Data Modeling
-*Design production-grade PostgreSQL/Supabase schemas with proper entity modeling, naming conventions, relationships, indexing strategies, Row-Level Security, and migration-ready SQL output.*
+# Database Architect
 
 ## Activation
 
-When this skill activates, output:
-
-`🏗️ Database Architect — Designing your data model...`
-
 | Context | Status |
 |---------|--------|
-| **User says "design database", "create tables", "database schema"** | ACTIVE |
-| **User says "data model", "ERD", "entity relationship"** | ACTIVE |
-| **User asks for table structures, column types, or constraints** | ACTIVE |
-| **User wants RLS policies as part of new schema design** | ACTIVE |
-| **User wants indexing strategy for new tables** | ACTIVE |
-| **User wants to ALTER existing tables or migrate schemas** | DORMANT — see migration-planner |
-| **User wants API route design over the schema** | DORMANT — see api-designer |
-| **User wants to audit existing RLS policies** | DORMANT — see rls-checker |
-| **User wants to add RLS to existing unprotected tables** | DORMANT — see rls-guardian |
+| Design new tables, schema, data model, ERD | ACTIVE |
+| RLS policies or indexing as part of new schema | ACTIVE |
+| ALTER existing tables, migrate schemas | DORMANT — migration-planner |
+| API route design over schema | DORMANT — api-designer |
+| Audit or add RLS to existing tables | DORMANT — rls-checker / rls-guardian |
 
-## Protocol
+## Instructions
 
 ### Step 1: Gather Inputs
 
-Ask the user for these details before designing. Provide sensible defaults for anything not specified.
+Collect before designing; default anything unspecified.
 
-| Input | Question | Default |
-|-------|----------|---------|
-| **Domain** | What does this application do? (e-commerce, SaaS, CRM, social platform) | — (required) |
-| **Entities** | What are the core data objects? (users, products, orders, etc.) | — (required) |
-| **Relationships** | How do entities relate? (user has many orders, product belongs to category) | Infer from domain |
-| **Scale** | Expected row counts? (thousands, millions, billions per table) | Thousands |
-| **Platform** | Supabase, raw PostgreSQL, or PostgreSQL + ORM? | Supabase |
-| **Multi-tenancy** | Single-tenant, user-isolated, or organization-based? | User-isolated |
-| **Auth model** | Supabase Auth, custom JWT, session-based? | Supabase Auth |
-| **Soft delete** | Should records be soft-deleted (archived) or hard-deleted? | Soft delete |
-| **Audit trail** | Do you need created_by/updated_by tracking or a full audit log? | Timestamps only |
-| **Existing schema** | Are there existing tables this must integrate with? | Greenfield |
+| Input | Default |
+|-------|---------|
+| Domain (what the app does) | required |
+| Core entities and relationships | required |
+| Scale (rows per table) | thousands |
+| Platform | Supabase |
+| Multi-tenancy (single, user-isolated, org-based) | user-isolated |
+| Auth model | Supabase Auth |
+| Soft delete | yes |
+| Audit trail | timestamps only |
+| Existing schema to integrate with | greenfield |
 
-**Example intake conversation:**
-
-```
-User: "Design a database for a project management SaaS"
-
-AI gathers:
-  Domain:         Project management SaaS
-  Entities:       users, organizations, projects, tasks, comments, labels
-  Relationships:  org hasMany users (via membership), org hasMany projects,
-                  project hasMany tasks, task hasMany comments,
-                  task manyToMany labels
-  Scale:          100K users, millions of tasks
-  Platform:       Supabase
-  Multi-tenancy:  Organization-based
-  Auth:           Supabase Auth
-  Soft delete:    Yes for tasks/projects, no for comments
-  Audit trail:    Timestamps + created_by
-```
+**Gate:** Do not proceed until domain and entities are confirmed.
 
 ### Step 2: Entity-Relationship Modeling
 
-Before writing SQL, map out the ERD in text notation. This ensures the user validates the data model before implementation.
+Map the ERD in text notation before any SQL. Use: `1--N` (one-to-many), `1--1`, `N--N` (needs junction), `--\|` (cascade dependency). Present to user for validation.
 
-**ERD notation conventions:**
+Cardinality rules: 1:1 = FK with UNIQUE on child. 1:N = FK on many side. M:N = junction table with composite PK. Self-referencing = FK to own table (`parent_id`). Polymorphic = avoid (see Anti-Patterns).
 
-```
-[EntityA] 1──N [EntityB]       → One-to-Many (EntityA has many EntityB)
-[EntityA] 1──1 [EntityB]       → One-to-One
-[EntityA] N──N [EntityB]       → Many-to-Many (requires junction table)
-[EntityA] 1──N? [EntityB]      → One-to-Many (optional — EntityB may have 0..N)
-[EntityA] ──┤ [EntityB]        → EntityB depends on EntityA (cascade delete)
-```
-
-**Build the ERD:**
-
-```
-── ENTITY-RELATIONSHIP DIAGRAM ──────────────────────
-
-[users] 1──N [org_members] N──1 [organizations]
-                                      │
-                                      1
-                                      │
-                                      N
-                                 [projects]
-                                      │
-                                      1
-                                      │
-                                      N
-                                   [tasks] N──N [labels]
-                                      │         (via task_labels)
-                                      1
-                                      │
-                                      N
-                                  [comments]
-
-Key:
-  users ──── org_members ──── organizations  (M:N via junction)
-  organizations ──── projects                 (1:N, cascade)
-  projects ──── tasks                         (1:N, cascade)
-  tasks ──── comments                         (1:N, cascade)
-  tasks ──── labels                           (M:N via task_labels)
-```
-
-**Cardinality rules:**
-
-| Relationship | Implementation | Junction table? |
-|-------------|----------------|-----------------|
-| **1:1** | FK with UNIQUE constraint on child | No |
-| **1:N** | FK on the "many" side pointing to the "one" side | No |
-| **M:N** | Junction table with two FKs forming composite PK | Yes |
-| **Self-referencing** | FK on same table (e.g., `parent_id` → `id`) | No |
-| **Polymorphic** | Avoid if possible — use junction tables or separate FKs | See Step 4 |
+**Gate:** User must confirm ERD before proceeding to table design.
 
 ### Step 3: Table Design
 
-Apply these conventions to every table.
+Naming conventions — enforced on every table, no exceptions:
 
-**Naming conventions:**
+| Element | Rule | Anti-pattern |
+|---------|------|-------------|
+| Tables | snake_case, plural | `OrgMember`, `org-members` |
+| Columns | snake_case, singular | `createdAt`, `Created_At` |
+| PKs | always `id` | `user_id` as PK on users |
+| FKs | `{singular_table}_id` | `proj`, `projectID` |
+| Booleans | `is_` or `has_` prefix | bare `active`, `verified` |
+| Timestamps | `_at` suffix, always `TIMESTAMPTZ` | `TIMESTAMP`, `creation_date` |
+| Junctions | `{tableA}_{tableB}` alphabetical | `label_task_map` |
+| Indexes | `idx_{table}_{columns}` | auto-generated names |
+| Constraints | `chk_{table}_{description}` | anonymous constraints |
 
-| Element | Convention | Example | Anti-pattern |
-|---------|-----------|---------|-------------|
-| **Tables** | snake_case, plural | `org_members` | ~~`OrgMember`~~, ~~`org-members`~~ |
-| **Columns** | snake_case, singular | `created_at` | ~~`createdAt`~~, ~~`Created_At`~~ |
-| **Primary keys** | `id` | `id UUID` | ~~`user_id`~~ as PK on `users` table |
-| **Foreign keys** | `{referenced_table_singular}_id` | `project_id` | ~~`proj`~~, ~~`projectID`~~ |
-| **Booleans** | `is_` or `has_` prefix | `is_active`, `has_verified_email` | ~~`active`~~, ~~`verified`~~ |
-| **Timestamps** | `_at` suffix | `created_at`, `deleted_at` | ~~`creation_date`~~ |
-| **Junction tables** | `{tableA}_{tableB}` alphabetically | `task_labels` | ~~`label_task_map`~~ |
-| **Indexes** | `idx_{table}_{columns}` | `idx_tasks_project_id` | Auto-generated names |
-| **Constraints** | `chk_{table}_{description}` | `chk_tasks_status_valid` | No name (anonymous) |
+UUID vs serial decision: UUID (`gen_random_uuid()`) for all user-facing tables — safe in URLs, no sequence contention, matches Supabase `auth.users.id`. BIGSERIAL only for high-volume internal tables (logs, events) where 8-byte storage and sequential I/O matter.
 
-**Primary key strategy — UUID vs serial:**
+Every table gets: `id UUID PK DEFAULT gen_random_uuid()`, `created_at TIMESTAMPTZ NOT NULL DEFAULT now()`, `updated_at TIMESTAMPTZ NOT NULL DEFAULT now()`. Add `deleted_at TIMESTAMPTZ` if soft delete. Add `created_by`/`updated_by UUID REFERENCES auth.users(id)` if audit tracking. Apply `update_updated_at()` trigger to every table.
 
-| Factor | UUID (`gen_random_uuid()`) | Serial (`BIGSERIAL`) |
-|--------|---------------------------|---------------------|
-| **Distributed inserts** | Excellent — no coordination | Poor — sequence contention |
-| **URL exposure** | Safe — not enumerable | Risky — sequential, guessable |
-| **Storage** | 16 bytes | 8 bytes |
-| **Index performance** | Slightly worse (random I/O) | Better (sequential) |
-| **Supabase default** | Yes — `auth.users.id` is UUID | Not standard |
-| **Recommendation** | **Use for all user-facing tables** | Use for high-volume internal tables (logs, events) |
+Column type constraints — use these exact types, never the alternatives:
 
-**Standard column set for every table:**
+- Short text: `TEXT` + named CHECK for length — never VARCHAR(n)
+- Money: `NUMERIC(12,2)` — never FLOAT/REAL
+- Enum-like: `TEXT` + CHECK with allowed values — not Postgres ENUM (hard to migrate)
+- Boolean: `BOOLEAN DEFAULT false` — never nullable
+- Timestamps: `TIMESTAMPTZ` — never bare `TIMESTAMP`
+- JSON: `JSONB` only for truly dynamic/flexible fields
+- Arrays: `TEXT[]` with GIN index for containment queries
 
-```sql
--- Every table gets these columns
-id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+**Gate:** Every constraint must be named. Anonymous constraints are a rejection.
 
--- If soft delete is enabled:
-deleted_at  TIMESTAMPTZ  -- NULL = active, NOT NULL = soft-deleted
+### Step 4: Relationships
 
--- If audit tracking is enabled:
-created_by  UUID REFERENCES auth.users(id),
-updated_by  UUID REFERENCES auth.users(id)
-```
+ON DELETE strategy decision tree:
 
-**Updated_at trigger (apply to every table):**
+- Child meaningless without parent? **CASCADE** (comments without task, org_members without org)
+- Child survives but needs cleanup? **SET NULL** (tasks.assigned_to when user removed) — column must be nullable
+- Child must preserve reference? **RESTRICT** (orders referencing product — keep history)
+- Child should use a fallback? **SET DEFAULT** (tasks.category_id to "Uncategorized") — column must have DEFAULT
 
-```sql
--- Create the function once
-CREATE OR REPLACE FUNCTION update_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = now();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+Polymorphic associations (`commentable_type` + `commentable_id`) are forbidden — no FK constraint possible. Alternatives: (a) separate nullable FKs with `CHECK (num_nonnulls(task_id, project_id) = 1)` for 2-3 targets, (b) separate junction tables for many targets.
 
--- Apply to each table
-CREATE TRIGGER set_updated_at
-  BEFORE UPDATE ON tasks
-  FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at();
-```
+1:1 implementation: PK of child IS the FK (`id UUID PRIMARY KEY REFERENCES parent(id) ON DELETE CASCADE`).
 
-**Column type reference:**
+Self-referencing: add `parent_{table_singular}_id` column referencing own `id`, always index it, use recursive CTEs for tree traversal.
 
-| Data | Type | Notes |
-|------|------|-------|
-| Identifier | `UUID` | `gen_random_uuid()` default |
-| Short text | `TEXT` with CHECK | `CHECK (char_length(name) <= 255)` — avoid VARCHAR |
-| Long text | `TEXT` | No length limit |
-| Email | `TEXT` + CHECK | `CHECK (email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')` |
-| URL | `TEXT` + CHECK | `CHECK (url ~* '^https?://')` |
-| Enum-like | `TEXT` + CHECK | `CHECK (status IN ('draft','active','archived'))` |
-| Money | `NUMERIC(12,2)` | Never use FLOAT for money |
-| Percentage | `NUMERIC(5,2)` + CHECK | `CHECK (rate >= 0 AND rate <= 100)` |
-| Boolean | `BOOLEAN` | Default to `false`, never NULL |
-| Counter | `INTEGER` + CHECK | `CHECK (count >= 0)` |
-| JSON config | `JSONB` | Use for flexible/dynamic fields only |
-| Tags/array | `TEXT[]` | Use GIN index for containment queries |
-| Timestamp | `TIMESTAMPTZ` | Always use TZ-aware — never `TIMESTAMP` |
-| Date only | `DATE` | For birth dates, deadlines without times |
-| IP address | `INET` | Native PostgreSQL type |
-| Sort order | `INTEGER` | For user-defined ordering |
-
-**CHECK constraints — always name them:**
-
-```sql
--- ❌ BAD: Anonymous constraint
-CREATE TABLE tasks (
-  status TEXT CHECK (status IN ('todo','in_progress','done'))
-);
-
--- ✅ GOOD: Named constraint with clear intent
-CREATE TABLE tasks (
-  status TEXT NOT NULL DEFAULT 'todo',
-  CONSTRAINT chk_tasks_status_valid
-    CHECK (status IN ('todo', 'in_progress', 'done'))
-);
-```
-
-**Example complete table:**
-
-```sql
-CREATE TABLE tasks (
-  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  project_id    UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  created_by    UUID NOT NULL REFERENCES auth.users(id),
-  assigned_to   UUID REFERENCES auth.users(id),
-  title         TEXT NOT NULL,
-  description   TEXT,
-  status        TEXT NOT NULL DEFAULT 'todo',
-  priority      INTEGER NOT NULL DEFAULT 0,
-  position      INTEGER NOT NULL DEFAULT 0,
-  due_date      DATE,
-  completed_at  TIMESTAMPTZ,
-  deleted_at    TIMESTAMPTZ,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-
-  CONSTRAINT chk_tasks_title_length
-    CHECK (char_length(title) BETWEEN 1 AND 500),
-  CONSTRAINT chk_tasks_status_valid
-    CHECK (status IN ('todo', 'in_progress', 'in_review', 'done', 'cancelled')),
-  CONSTRAINT chk_tasks_priority_range
-    CHECK (priority BETWEEN 0 AND 4),
-  CONSTRAINT chk_tasks_completed_consistency
-    CHECK (
-      (status = 'done' AND completed_at IS NOT NULL) OR
-      (status != 'done' AND completed_at IS NULL)
-    )
-);
-
-CREATE TRIGGER set_tasks_updated_at
-  BEFORE UPDATE ON tasks
-  FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at();
-```
-
-### Step 4: Relationship Implementation
-
-**Foreign key ON DELETE strategy decision tree:**
-
-```
-Does the child make sense without the parent?
-│
-├── NO → CASCADE
-│   Examples: comments without a task, org_members without an org
-│   ON DELETE CASCADE — deleting parent removes children
-│
-├── YES, but needs cleanup → SET NULL
-│   Examples: tasks.assigned_to when user is removed
-│   ON DELETE SET NULL — column must be nullable
-│
-├── YES, and must preserve reference → RESTRICT
-│   Examples: orders referencing a product (keep order history)
-│   ON DELETE RESTRICT — block parent deletion
-│
-└── YES, use a default → SET DEFAULT
-    Examples: tasks.category_id falling back to "Uncategorized"
-    ON DELETE SET DEFAULT — column must have a DEFAULT
-```
-
-**Standard foreign key implementation:**
-
-```sql
--- 1:N — Project has many tasks
-ALTER TABLE tasks
-  ADD CONSTRAINT fk_tasks_project
-  FOREIGN KEY (project_id) REFERENCES projects(id)
-  ON DELETE CASCADE;
-
--- 1:N — Task optionally assigned to user
-ALTER TABLE tasks
-  ADD CONSTRAINT fk_tasks_assigned_to
-  FOREIGN KEY (assigned_to) REFERENCES auth.users(id)
-  ON DELETE SET NULL;
-
--- M:N — Tasks have many labels (junction table)
-CREATE TABLE task_labels (
-  task_id   UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-  label_id  UUID NOT NULL REFERENCES labels(id) ON DELETE CASCADE,
-  PRIMARY KEY (task_id, label_id)
-);
-
--- 1:1 — User has one profile
-CREATE TABLE profiles (
-  id         UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  display_name TEXT,
-  avatar_url   TEXT,
-  bio          TEXT
-);
--- Note: PK is the FK itself — guarantees 1:1
-```
-
-**Self-referencing (hierarchical data):**
-
-```sql
--- Tasks with subtasks
-ALTER TABLE tasks
-  ADD COLUMN parent_task_id UUID REFERENCES tasks(id) ON DELETE CASCADE;
-
--- Index for efficient tree queries
-CREATE INDEX idx_tasks_parent_task_id ON tasks(parent_task_id);
-
--- Recursive CTE to get full subtask tree
-WITH RECURSIVE task_tree AS (
-  SELECT id, title, parent_task_id, 0 AS depth
-  FROM tasks
-  WHERE id = :root_task_id
-
-  UNION ALL
-
-  SELECT t.id, t.title, t.parent_task_id, tt.depth + 1
-  FROM tasks t
-  JOIN task_tree tt ON t.parent_task_id = tt.id
-  WHERE t.deleted_at IS NULL
-)
-SELECT * FROM task_tree ORDER BY depth, title;
-```
-
-**Polymorphic associations — avoid the anti-pattern:**
-
-```sql
--- ❌ BAD: Polymorphic — `commentable_type` + `commentable_id`
-CREATE TABLE comments (
-  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  commentable_type TEXT,     -- 'task', 'project', 'file'
-  commentable_id   UUID,     -- No FK constraint possible!
-  body             TEXT
-);
-
--- ✅ GOOD: Separate nullable FKs (works for 2-3 targets)
-CREATE TABLE comments (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  task_id     UUID REFERENCES tasks(id) ON DELETE CASCADE,
-  project_id  UUID REFERENCES projects(id) ON DELETE CASCADE,
-  body        TEXT NOT NULL,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-
-  CONSTRAINT chk_comments_single_parent
-    CHECK (num_nonnulls(task_id, project_id) = 1)
-);
-
--- ✅ ALSO GOOD: Separate junction tables (works for many targets)
-CREATE TABLE task_comments (
-  task_id    UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-  comment_id UUID NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
-  PRIMARY KEY (task_id, comment_id)
-);
-
-CREATE TABLE project_comments (
-  project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  comment_id UUID NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
-  PRIMARY KEY (project_id, comment_id)
-);
-```
+**Gate:** Every FK must have an explicit ON DELETE strategy with documented rationale.
 
 ### Step 5: Indexing Strategy
 
-**Index type decision tree:**
+Index type selection:
 
-```
-What kind of query are you optimizing?
-│
-├── Equality or range on scalar columns (=, <, >, BETWEEN, ORDER BY)
-│   → B-tree (default)
-│   CREATE INDEX idx_tasks_status ON tasks(status);
-│
-├── Full-text search (LIKE '%term%', tsvector)
-│   → GIN on tsvector
-│   CREATE INDEX idx_tasks_search ON tasks USING GIN(to_tsvector('english', title || ' ' || description));
-│
-├── JSONB containment (@>, ?, ?|, ?&)
-│   → GIN on JSONB
-│   CREATE INDEX idx_tasks_metadata ON tasks USING GIN(metadata);
-│
-├── Array containment (@>, &&)
-│   → GIN on array
-│   CREATE INDEX idx_tasks_tags ON tasks USING GIN(tags);
-│
-├── Geometric/spatial queries (PostGIS, range types)
-│   → GiST
-│   CREATE INDEX idx_locations_coords ON locations USING GIST(coordinates);
-│
-└── Trigram similarity (ILIKE '%partial%', pg_trgm)
-    → GIN with trigram extension
-    CREATE EXTENSION IF NOT EXISTS pg_trgm;
-    CREATE INDEX idx_users_name_trgm ON users USING GIN(name gin_trgm_ops);
-```
+| Query pattern | Index type |
+|---------------|-----------|
+| Equality, range, ORDER BY on scalars | B-tree (default) |
+| Full-text search, tsvector | GIN on tsvector |
+| JSONB containment (`@>`, `?`, `?\|`) | GIN on JSONB column |
+| Array containment (`@>`, `&&`) | GIN on array column |
+| Geometric/spatial, range types | GiST |
+| ILIKE '%partial%', fuzzy matching | GIN with `pg_trgm` extension |
 
-**Composite indexes — column order matters:**
+Composite index rule: equality columns first, then range/sort columns. Index on `(a, b, c)` serves queries on `(a)`, `(a, b)`, `(a, b, c)` but NOT `(b)` or `(c)` alone.
 
-```sql
--- Query: WHERE project_id = ? AND status = ? ORDER BY created_at DESC
--- Index must match: equality columns first, then range/sort columns
-CREATE INDEX idx_tasks_project_status_created
-  ON tasks(project_id, status, created_at DESC);
+Partial indexes: filter with WHERE to shrink index size (e.g., `WHERE deleted_at IS NULL` for soft-delete tables).
 
--- This index serves ALL of these queries efficiently:
---   WHERE project_id = ?
---   WHERE project_id = ? AND status = ?
---   WHERE project_id = ? AND status = ? ORDER BY created_at DESC
--- But NOT:
---   WHERE status = ?            (skips leading column)
---   WHERE created_at > ?        (skips leading columns)
-```
+Covering indexes: use INCLUDE for columns needed in SELECT but not WHERE, avoiding heap lookups.
 
-**Partial indexes — index only what you query:**
+Mandatory indexes: every FK column (Postgres does NOT auto-index FKs), every `deleted_at` with partial filter, every `created_at DESC` for pagination.
 
-```sql
--- Only index active (non-deleted) tasks — much smaller index
-CREATE INDEX idx_tasks_active_project
-  ON tasks(project_id, status)
-  WHERE deleted_at IS NULL;
+When NOT to index: low-cardinality columns (use partial index instead), write-heavy tables with rare reads, tables under 10K rows, columns already covered by a composite index's leading columns.
 
--- Only index unresolved tasks for the dashboard query
-CREATE INDEX idx_tasks_unresolved
-  ON tasks(assigned_to, due_date)
-  WHERE status NOT IN ('done', 'cancelled') AND deleted_at IS NULL;
-
--- Only index verified users
-CREATE INDEX idx_users_verified_email
-  ON users(email)
-  WHERE has_verified_email = true;
-```
-
-**Covering indexes (INCLUDE) — avoid heap lookups:**
-
-```sql
--- Query: SELECT id, title, status FROM tasks WHERE project_id = ? AND deleted_at IS NULL
--- Include non-filtered columns so Postgres can answer from the index alone
-CREATE INDEX idx_tasks_project_covering
-  ON tasks(project_id)
-  INCLUDE (title, status)
-  WHERE deleted_at IS NULL;
-```
-
-**Unique indexes as constraints:**
-
-```sql
--- User can only be a member of an org once
-CREATE UNIQUE INDEX idx_org_members_unique
-  ON org_members(organization_id, user_id);
-
--- Unique email but only for active (non-deleted) users
-CREATE UNIQUE INDEX idx_users_unique_email_active
-  ON users(email)
-  WHERE deleted_at IS NULL;
-
--- Unique slug per project (soft-delete aware)
-CREATE UNIQUE INDEX idx_projects_unique_slug
-  ON projects(organization_id, slug)
-  WHERE deleted_at IS NULL;
-```
-
-**When NOT to index:**
-
-| Scenario | Why |
-|----------|-----|
-| **Low-cardinality columns** (e.g., `is_active` with 90% true) | B-tree scan not much faster than sequential scan — use partial index instead |
-| **Write-heavy tables with rare reads** (event logs, audit trails) | Each index slows INSERT/UPDATE — only index if you query it |
-| **Small tables (< 10K rows)** | Sequential scan is faster than index lookup at small scale |
-| **Columns updated frequently** | Index maintenance on every UPDATE — only if the read benefit justifies it |
-| **Already covered by another index** | Leading columns of a composite index cover single-column queries |
-
-**Standard indexes for every schema:**
-
-```sql
--- Always index foreign keys (PostgreSQL does NOT auto-index FKs)
-CREATE INDEX idx_tasks_project_id ON tasks(project_id);
-CREATE INDEX idx_tasks_assigned_to ON tasks(assigned_to);
-CREATE INDEX idx_tasks_created_by ON tasks(created_by);
-CREATE INDEX idx_comments_task_id ON comments(task_id);
-CREATE INDEX idx_org_members_user_id ON org_members(user_id);
-CREATE INDEX idx_org_members_org_id ON org_members(organization_id);
-
--- Always index soft-delete filter columns
-CREATE INDEX idx_tasks_deleted_at ON tasks(deleted_at) WHERE deleted_at IS NULL;
-
--- Always index created_at for time-based queries and pagination
-CREATE INDEX idx_tasks_created_at ON tasks(created_at DESC);
-```
+**Gate:** Every FK column must have a corresponding index in the output.
 
 ### Step 6: Row-Level Security
 
-**Only apply this step if the platform is Supabase or the user explicitly wants RLS.**
+Skip if platform is not Supabase and user did not request RLS.
 
-**RLS activation pattern:**
+Critical rule: always `ENABLE ROW LEVEL SECURITY` and `FORCE ROW LEVEL SECURITY` and add policies in the SAME migration. Enabling without policies locks out all access.
 
-```sql
--- ALWAYS enable RLS and add policies in the SAME migration
--- Enabling RLS without policies locks out all access
-ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
+RLS pattern selection by multi-tenancy model:
 
--- Force RLS for table owners too (Supabase best practice)
-ALTER TABLE tasks FORCE ROW LEVEL SECURITY;
-```
+- **User ownership (single-user isolation):** USING/WITH CHECK on `created_by = auth.uid()` for all operations.
+- **Org multi-tenancy:** Create `get_user_org_ids()` helper function (`SECURITY DEFINER STABLE`), filter by `organization_id IN (SELECT get_user_org_ids())`. Roles gate write operations (owner/admin for destructive ops).
+- **Role-based within org:** Create `get_user_org_role(org_id)` helper, use role checks in USING clauses (owner/admin = ALL, member = read+create, viewer = read only).
+- **Public read, authenticated write:** anon+authenticated SELECT with `is_published = true`, owner-only write with `author_id = auth.uid()`.
+- **Inherited access (child via parent):** Use `EXISTS` subquery against parent table, which triggers parent's own RLS policies.
 
-**Pattern 1: User Ownership (single-user isolation)**
+RLS performance rules: index every column in USING/WITH CHECK. Use `SECURITY DEFINER` helpers for complex subqueries. Mark helpers as `STABLE`. Prefer `EXISTS` over `IN` for correlated subqueries.
 
-```sql
--- User can only CRUD their own rows
-CREATE POLICY "users_select_own" ON tasks
-  FOR SELECT TO authenticated
-  USING (created_by = auth.uid());
+Never use `USING (true)` on sensitive tables. Always pair USING with WITH CHECK on INSERT/UPDATE policies.
 
-CREATE POLICY "users_insert_own" ON tasks
-  FOR INSERT TO authenticated
-  WITH CHECK (created_by = auth.uid());
-
-CREATE POLICY "users_update_own" ON tasks
-  FOR UPDATE TO authenticated
-  USING (created_by = auth.uid())
-  WITH CHECK (created_by = auth.uid());
-
-CREATE POLICY "users_delete_own" ON tasks
-  FOR DELETE TO authenticated
-  USING (created_by = auth.uid());
-```
-
-**Pattern 2: Organization Multi-Tenancy**
-
-```sql
--- Helper function: get user's org IDs (cache-friendly)
-CREATE OR REPLACE FUNCTION get_user_org_ids()
-RETURNS SETOF UUID AS $$
-  SELECT organization_id
-  FROM org_members
-  WHERE user_id = auth.uid()
-    AND deleted_at IS NULL;
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
-
--- Users can access resources in their organizations
-CREATE POLICY "org_select" ON projects
-  FOR SELECT TO authenticated
-  USING (organization_id IN (SELECT get_user_org_ids()));
-
-CREATE POLICY "org_insert" ON projects
-  FOR INSERT TO authenticated
-  WITH CHECK (organization_id IN (SELECT get_user_org_ids()));
-
-CREATE POLICY "org_update" ON projects
-  FOR UPDATE TO authenticated
-  USING (organization_id IN (SELECT get_user_org_ids()))
-  WITH CHECK (organization_id IN (SELECT get_user_org_ids()));
-
-CREATE POLICY "org_delete" ON projects
-  FOR DELETE TO authenticated
-  USING (organization_id IN (SELECT get_user_org_ids()));
-```
-
-**Pattern 3: Role-Based Access Within Organization**
-
-```sql
--- Helper function: get user's role in a specific org
-CREATE OR REPLACE FUNCTION get_user_org_role(org_id UUID)
-RETURNS TEXT AS $$
-  SELECT role FROM org_members
-  WHERE user_id = auth.uid()
-    AND organization_id = org_id
-    AND deleted_at IS NULL;
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
-
--- Admins can do everything, members can read and create, viewers can only read
-CREATE POLICY "org_admin_all" ON projects
-  FOR ALL TO authenticated
-  USING (get_user_org_role(organization_id) IN ('owner', 'admin'));
-
-CREATE POLICY "org_member_read" ON projects
-  FOR SELECT TO authenticated
-  USING (get_user_org_role(organization_id) IN ('owner', 'admin', 'member', 'viewer'));
-
-CREATE POLICY "org_member_insert" ON projects
-  FOR INSERT TO authenticated
-  WITH CHECK (get_user_org_role(organization_id) IN ('owner', 'admin', 'member'));
-```
-
-**Pattern 4: Public Read, Authenticated Write**
-
-```sql
--- Public content visible to everyone, writable by owners
-CREATE POLICY "public_read" ON blog_posts
-  FOR SELECT TO anon, authenticated
-  USING (is_published = true);
-
-CREATE POLICY "owner_read_drafts" ON blog_posts
-  FOR SELECT TO authenticated
-  USING (author_id = auth.uid());
-
-CREATE POLICY "owner_write" ON blog_posts
-  FOR INSERT TO authenticated
-  WITH CHECK (author_id = auth.uid());
-
-CREATE POLICY "owner_update" ON blog_posts
-  FOR UPDATE TO authenticated
-  USING (author_id = auth.uid())
-  WITH CHECK (author_id = auth.uid());
-```
-
-**Pattern 5: Inherited Access (child inherits parent's policies)**
-
-```sql
--- Comments are accessible if user can access the parent task
-CREATE POLICY "comments_via_task" ON comments
-  FOR SELECT TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM tasks
-      WHERE tasks.id = comments.task_id
-      AND tasks.deleted_at IS NULL
-      -- This triggers the tasks table's own RLS policies
-    )
-  );
-```
-
-**RLS performance tips:**
-
-- Index every column referenced in USING/WITH CHECK expressions
-- Use `SECURITY DEFINER` helper functions for complex subqueries (avoids nested RLS evaluation)
-- Mark helper functions as `STABLE` (tells Postgres the result won't change within a transaction)
-- Prefer `EXISTS` over `IN` for correlated subqueries in policies
-- Test with `EXPLAIN ANALYZE` after setting role: `SET ROLE authenticated; SET request.jwt.claims = '{"sub":"..."}';`
+**Gate:** Every table with RLS enabled must have at least one policy per operation (SELECT, INSERT, UPDATE, DELETE).
 
 ### Step 7: Migration Generation
 
-Generate migration SQL ready for `supabase migration new` or raw `psql`.
+Order: extensions, functions, tables (dependency order — parents before children), indexes, RLS policies, triggers.
 
-**Supabase CLI workflow:**
+Supabase workflow: `supabase migration new {name}` creates the file, paste SQL, `supabase db reset` to test locally, `supabase db push` to deploy.
 
-```bash
-# Create a new migration file
-supabase migration new create_project_tables
+For audit log: use BIGSERIAL PK (high-volume append-only), generic trigger function with `TG_OP`/`TG_TABLE_NAME`, JSONB for old/new data, index on `(table_name, record_id)` and `changed_at DESC`.
 
-# This creates: supabase/migrations/YYYYMMDDHHMMSS_create_project_tables.sql
-# Paste the generated SQL into this file
+Supabase profiles pattern: auto-create profile row on `auth.users` INSERT via trigger with `SECURITY DEFINER`.
 
-# Test locally
-supabase db reset
+**Gate:** Migration must run cleanly on `supabase db reset` — no forward references, no missing dependencies.
 
-# Push to remote
-supabase db push
-```
+### Step 8: Output Summary
 
-**Migration file structure:**
+Present: domain, table count, relationship count, multi-tenancy model, text ERD, table list with purpose, index summary, RLS pattern used, migration file path, next steps (review ERD, run migration, test RLS, add seed data).
 
-```sql
--- Migration: create_project_tables
--- Description: Core schema for project management SaaS
--- Author: database-architect skill
--- Date: YYYY-MM-DD
+## Examples
 
--- ============================================================
--- EXTENSIONS
--- ============================================================
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";   -- for gen_random_uuid() if needed
-CREATE EXTENSION IF NOT EXISTS "pg_trgm";    -- for trigram search indexes
+**Example 1:** "Design a database for a project management SaaS"
+Decisions: org-based multi-tenancy via `org_members` junction with role column, CASCADE from org down to projects/tasks/comments, SET NULL on `tasks.assigned_to`, GIN trigram index on task title for search, org-scoped RLS with `get_user_org_ids()` helper.
+Result: 7 tables + audit log, 15+ indexes, full RLS with role-gated writes, single migration file.
 
--- ============================================================
--- FUNCTIONS
--- ============================================================
-CREATE OR REPLACE FUNCTION update_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = now();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+**Example 2:** "I need tables for a blog platform with public and draft posts"
+Decisions: user-isolated (no orgs), UUID PKs, public-read/owner-write RLS pattern with `is_published` gate, separate nullable FKs for comments on posts vs pages (not polymorphic), GIN index on `to_tsvector` for post search, soft delete on posts only.
+Result: 4 tables (profiles, posts, comments, categories), partial index on published posts, dual RLS policies (anon read published, owner read all).
 
--- ============================================================
--- TABLES (ordered by dependency — parents before children)
--- ============================================================
+## Common Issues
 
--- 1. Organizations
-CREATE TABLE organizations (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name        TEXT NOT NULL,
-  slug        TEXT NOT NULL,
-  avatar_url  TEXT,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-  deleted_at  TIMESTAMPTZ,
-
-  CONSTRAINT chk_organizations_name_length
-    CHECK (char_length(name) BETWEEN 1 AND 255),
-  CONSTRAINT chk_organizations_slug_format
-    CHECK (slug ~* '^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$')
-);
-
-CREATE UNIQUE INDEX idx_organizations_unique_slug
-  ON organizations(slug) WHERE deleted_at IS NULL;
-
-CREATE TRIGGER set_organizations_updated_at
-  BEFORE UPDATE ON organizations
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-
--- 2. Organization members (junction: users <-> organizations)
-CREATE TABLE org_members (
-  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id   UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  user_id           UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  role              TEXT NOT NULL DEFAULT 'member',
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
-  deleted_at        TIMESTAMPTZ,
-
-  CONSTRAINT chk_org_members_role_valid
-    CHECK (role IN ('owner', 'admin', 'member', 'viewer'))
-);
-
-CREATE UNIQUE INDEX idx_org_members_unique_membership
-  ON org_members(organization_id, user_id) WHERE deleted_at IS NULL;
-CREATE INDEX idx_org_members_user_id ON org_members(user_id);
-CREATE INDEX idx_org_members_org_id ON org_members(organization_id);
-
-CREATE TRIGGER set_org_members_updated_at
-  BEFORE UPDATE ON org_members
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-
--- 3. Projects
-CREATE TABLE projects (
-  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id   UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  created_by        UUID NOT NULL REFERENCES auth.users(id),
-  name              TEXT NOT NULL,
-  slug              TEXT NOT NULL,
-  description       TEXT,
-  is_archived       BOOLEAN NOT NULL DEFAULT false,
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
-  deleted_at        TIMESTAMPTZ,
-
-  CONSTRAINT chk_projects_name_length
-    CHECK (char_length(name) BETWEEN 1 AND 255)
-);
-
-CREATE UNIQUE INDEX idx_projects_unique_slug_per_org
-  ON projects(organization_id, slug) WHERE deleted_at IS NULL;
-CREATE INDEX idx_projects_org_id ON projects(organization_id);
-CREATE INDEX idx_projects_created_by ON projects(created_by);
-
-CREATE TRIGGER set_projects_updated_at
-  BEFORE UPDATE ON projects
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-
--- 4. Tasks
-CREATE TABLE tasks (
-  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  project_id      UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  created_by      UUID NOT NULL REFERENCES auth.users(id),
-  assigned_to     UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-  parent_task_id  UUID REFERENCES tasks(id) ON DELETE CASCADE,
-  title           TEXT NOT NULL,
-  description     TEXT,
-  status          TEXT NOT NULL DEFAULT 'todo',
-  priority        INTEGER NOT NULL DEFAULT 0,
-  position        INTEGER NOT NULL DEFAULT 0,
-  due_date        DATE,
-  completed_at    TIMESTAMPTZ,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-  deleted_at      TIMESTAMPTZ,
-
-  CONSTRAINT chk_tasks_title_length
-    CHECK (char_length(title) BETWEEN 1 AND 500),
-  CONSTRAINT chk_tasks_status_valid
-    CHECK (status IN ('todo', 'in_progress', 'in_review', 'done', 'cancelled')),
-  CONSTRAINT chk_tasks_priority_range
-    CHECK (priority BETWEEN 0 AND 4)
-);
-
-CREATE INDEX idx_tasks_project_id ON tasks(project_id);
-CREATE INDEX idx_tasks_assigned_to ON tasks(assigned_to);
-CREATE INDEX idx_tasks_created_by ON tasks(created_by);
-CREATE INDEX idx_tasks_parent_task_id ON tasks(parent_task_id);
-CREATE INDEX idx_tasks_project_status
-  ON tasks(project_id, status) WHERE deleted_at IS NULL;
-CREATE INDEX idx_tasks_created_at ON tasks(created_at DESC);
-
-CREATE TRIGGER set_tasks_updated_at
-  BEFORE UPDATE ON tasks
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-
--- 5. Labels
-CREATE TABLE labels (
-  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id   UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  name              TEXT NOT NULL,
-  color             TEXT NOT NULL DEFAULT '#6B7280',
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
-
-  CONSTRAINT chk_labels_name_length
-    CHECK (char_length(name) BETWEEN 1 AND 50),
-  CONSTRAINT chk_labels_color_hex
-    CHECK (color ~* '^#[0-9A-Fa-f]{6}$')
-);
-
-CREATE UNIQUE INDEX idx_labels_unique_name_per_org
-  ON labels(organization_id, name);
-CREATE INDEX idx_labels_org_id ON labels(organization_id);
-
--- 6. Task-Label junction
-CREATE TABLE task_labels (
-  task_id   UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-  label_id  UUID NOT NULL REFERENCES labels(id) ON DELETE CASCADE,
-  PRIMARY KEY (task_id, label_id)
-);
-
--- 7. Comments
-CREATE TABLE comments (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  task_id     UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-  created_by  UUID NOT NULL REFERENCES auth.users(id),
-  body        TEXT NOT NULL,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-
-  CONSTRAINT chk_comments_body_not_empty
-    CHECK (char_length(body) >= 1)
-);
-
-CREATE INDEX idx_comments_task_id ON comments(task_id);
-CREATE INDEX idx_comments_created_by ON comments(created_by);
-
-CREATE TRIGGER set_comments_updated_at
-  BEFORE UPDATE ON comments
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-
--- ============================================================
--- ROW LEVEL SECURITY
--- ============================================================
-
--- Helper: get org IDs for current user
-CREATE OR REPLACE FUNCTION get_user_org_ids()
-RETURNS SETOF UUID AS $$
-  SELECT organization_id FROM org_members
-  WHERE user_id = auth.uid() AND deleted_at IS NULL;
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
-
--- Organizations: members can read, owners/admins can write
-ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE organizations FORCE ROW LEVEL SECURITY;
-
-CREATE POLICY "org_select" ON organizations
-  FOR SELECT TO authenticated
-  USING (id IN (SELECT get_user_org_ids()));
-
-CREATE POLICY "org_insert" ON organizations
-  FOR INSERT TO authenticated
-  WITH CHECK (true);  -- Anyone can create an org
-
-CREATE POLICY "org_update" ON organizations
-  FOR UPDATE TO authenticated
-  USING (id IN (
-    SELECT organization_id FROM org_members
-    WHERE user_id = auth.uid() AND role IN ('owner', 'admin') AND deleted_at IS NULL
-  ));
-
--- Org members: visible to fellow members
-ALTER TABLE org_members ENABLE ROW LEVEL SECURITY;
-ALTER TABLE org_members FORCE ROW LEVEL SECURITY;
-
-CREATE POLICY "org_members_select" ON org_members
-  FOR SELECT TO authenticated
-  USING (organization_id IN (SELECT get_user_org_ids()));
-
-CREATE POLICY "org_members_manage" ON org_members
-  FOR ALL TO authenticated
-  USING (organization_id IN (
-    SELECT organization_id FROM org_members
-    WHERE user_id = auth.uid() AND role IN ('owner', 'admin') AND deleted_at IS NULL
-  ));
-
--- Projects: org members can read, members+ can write
-ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
-ALTER TABLE projects FORCE ROW LEVEL SECURITY;
-
-CREATE POLICY "projects_select" ON projects
-  FOR SELECT TO authenticated
-  USING (organization_id IN (SELECT get_user_org_ids()));
-
-CREATE POLICY "projects_insert" ON projects
-  FOR INSERT TO authenticated
-  WITH CHECK (organization_id IN (SELECT get_user_org_ids()));
-
-CREATE POLICY "projects_update" ON projects
-  FOR UPDATE TO authenticated
-  USING (organization_id IN (SELECT get_user_org_ids()));
-
-CREATE POLICY "projects_delete" ON projects
-  FOR DELETE TO authenticated
-  USING (organization_id IN (
-    SELECT organization_id FROM org_members
-    WHERE user_id = auth.uid() AND role IN ('owner', 'admin') AND deleted_at IS NULL
-  ));
-
--- Tasks: accessible if user can access the parent project
-ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE tasks FORCE ROW LEVEL SECURITY;
-
-CREATE POLICY "tasks_select" ON tasks
-  FOR SELECT TO authenticated
-  USING (EXISTS (
-    SELECT 1 FROM projects
-    WHERE projects.id = tasks.project_id
-    AND projects.organization_id IN (SELECT get_user_org_ids())
-  ));
-
-CREATE POLICY "tasks_insert" ON tasks
-  FOR INSERT TO authenticated
-  WITH CHECK (EXISTS (
-    SELECT 1 FROM projects
-    WHERE projects.id = tasks.project_id
-    AND projects.organization_id IN (SELECT get_user_org_ids())
-  ));
-
-CREATE POLICY "tasks_update" ON tasks
-  FOR UPDATE TO authenticated
-  USING (EXISTS (
-    SELECT 1 FROM projects
-    WHERE projects.id = tasks.project_id
-    AND projects.organization_id IN (SELECT get_user_org_ids())
-  ));
-
-CREATE POLICY "tasks_delete" ON tasks
-  FOR DELETE TO authenticated
-  USING (EXISTS (
-    SELECT 1 FROM projects
-    WHERE projects.id = tasks.project_id
-    AND projects.organization_id IN (SELECT get_user_org_ids())
-  ));
-
--- Comments: accessible via task -> project -> org chain
-ALTER TABLE comments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE comments FORCE ROW LEVEL SECURITY;
-
-CREATE POLICY "comments_select" ON comments
-  FOR SELECT TO authenticated
-  USING (EXISTS (
-    SELECT 1 FROM tasks
-    JOIN projects ON projects.id = tasks.project_id
-    WHERE tasks.id = comments.task_id
-    AND projects.organization_id IN (SELECT get_user_org_ids())
-  ));
-
-CREATE POLICY "comments_insert" ON comments
-  FOR INSERT TO authenticated
-  WITH CHECK (
-    created_by = auth.uid()
-    AND EXISTS (
-      SELECT 1 FROM tasks
-      JOIN projects ON projects.id = tasks.project_id
-      WHERE tasks.id = comments.task_id
-      AND projects.organization_id IN (SELECT get_user_org_ids())
-    )
-  );
-
-CREATE POLICY "comments_update_own" ON comments
-  FOR UPDATE TO authenticated
-  USING (created_by = auth.uid());
-
-CREATE POLICY "comments_delete_own" ON comments
-  FOR DELETE TO authenticated
-  USING (created_by = auth.uid());
-
--- Labels: org-scoped
-ALTER TABLE labels ENABLE ROW LEVEL SECURITY;
-ALTER TABLE labels FORCE ROW LEVEL SECURITY;
-
-CREATE POLICY "labels_select" ON labels
-  FOR SELECT TO authenticated
-  USING (organization_id IN (SELECT get_user_org_ids()));
-
-CREATE POLICY "labels_manage" ON labels
-  FOR ALL TO authenticated
-  USING (organization_id IN (SELECT get_user_org_ids()));
-
--- Task labels: accessible via task
-ALTER TABLE task_labels ENABLE ROW LEVEL SECURITY;
-ALTER TABLE task_labels FORCE ROW LEVEL SECURITY;
-
-CREATE POLICY "task_labels_select" ON task_labels
-  FOR SELECT TO authenticated
-  USING (EXISTS (
-    SELECT 1 FROM tasks
-    JOIN projects ON projects.id = tasks.project_id
-    WHERE tasks.id = task_labels.task_id
-    AND projects.organization_id IN (SELECT get_user_org_ids())
-  ));
-
-CREATE POLICY "task_labels_manage" ON task_labels
-  FOR ALL TO authenticated
-  USING (EXISTS (
-    SELECT 1 FROM tasks
-    JOIN projects ON projects.id = tasks.project_id
-    WHERE tasks.id = task_labels.task_id
-    AND projects.organization_id IN (SELECT get_user_org_ids())
-  ));
-
--- ============================================================
--- AUDIT LOG (optional — include if user requested audit trail)
--- ============================================================
-
-CREATE TABLE audit_log (
-  id          BIGSERIAL PRIMARY KEY,  -- Serial for high-volume append-only
-  table_name  TEXT NOT NULL,
-  record_id   UUID NOT NULL,
-  action      TEXT NOT NULL,  -- INSERT, UPDATE, DELETE
-  old_data    JSONB,
-  new_data    JSONB,
-  changed_by  UUID REFERENCES auth.users(id),
-  changed_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-
-  CONSTRAINT chk_audit_log_action_valid
-    CHECK (action IN ('INSERT', 'UPDATE', 'DELETE'))
-);
-
-CREATE INDEX idx_audit_log_table_record ON audit_log(table_name, record_id);
-CREATE INDEX idx_audit_log_changed_at ON audit_log(changed_at DESC);
-CREATE INDEX idx_audit_log_changed_by ON audit_log(changed_by);
-
--- Generic audit trigger function
-CREATE OR REPLACE FUNCTION audit_trigger()
-RETURNS TRIGGER AS $$
-BEGIN
-  IF TG_OP = 'INSERT' THEN
-    INSERT INTO audit_log (table_name, record_id, action, new_data, changed_by)
-    VALUES (TG_TABLE_NAME, NEW.id, 'INSERT', to_jsonb(NEW), auth.uid());
-    RETURN NEW;
-  ELSIF TG_OP = 'UPDATE' THEN
-    INSERT INTO audit_log (table_name, record_id, action, old_data, new_data, changed_by)
-    VALUES (TG_TABLE_NAME, NEW.id, 'UPDATE', to_jsonb(OLD), to_jsonb(NEW), auth.uid());
-    RETURN NEW;
-  ELSIF TG_OP = 'DELETE' THEN
-    INSERT INTO audit_log (table_name, record_id, action, old_data, changed_by)
-    VALUES (TG_TABLE_NAME, OLD.id, 'DELETE', to_jsonb(OLD), auth.uid());
-    RETURN OLD;
-  END IF;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Apply to tables that need auditing
-CREATE TRIGGER audit_tasks
-  AFTER INSERT OR UPDATE OR DELETE ON tasks
-  FOR EACH ROW EXECUTE FUNCTION audit_trigger();
-```
-
-### Step 8: Output
-
-After generating the schema, present this summary:
-
-```
-━━━ DATABASE ARCHITECT — SCHEMA REPORT ━━━━━━━━
-
-── DATA MODEL ───────────────────────────────────
-Domain:       [project management SaaS]
-Tables:       [7] (+ 1 audit log)
-Relationships: [6] foreign keys, [2] junction tables
-Multi-tenancy: [organization-based via org_members]
-
-── ENTITY-RELATIONSHIP DIAGRAM ──────────────────
-[Text ERD from Step 2]
-
-── TABLES ───────────────────────────────────────
-  organizations     — Tenant boundary
-  org_members       — User <-> Org junction (M:N with role)
-  projects          — Scoped to organization
-  tasks             — Scoped to project, supports subtasks
-  labels            — Org-wide, reusable across projects
-  task_labels       — Task <-> Label junction (M:N)
-  comments          — Scoped to task
-  audit_log         — Append-only change history
-
-── INDEXES ──────────────────────────────────────
-  [N] indexes total
-  [N] foreign key indexes
-  [N] unique indexes
-  [N] partial indexes
-  [N] composite indexes
-
-── ROW LEVEL SECURITY ───────────────────────────
-  All [N] tables: RLS enabled + forced
-  Pattern: Organization multi-tenancy via get_user_org_ids()
-  Helper functions: [list]
-
-── MIGRATION FILES ──────────────────────────────
-  supabase/migrations/YYYYMMDDHHMMSS_create_project_tables.sql
-
-── NEXT STEPS ───────────────────────────────────
-  1. Review the ERD and confirm entity relationships
-  2. Run `supabase migration new create_project_tables` and paste SQL
-  3. Run `supabase db reset` to test locally
-  4. Test RLS with role impersonation queries
-  5. Add seed data for development
-  6. Update Ctrl+A → F9 if using field codes in related docs
-```
-
-## Common Schema Patterns
-
-### Pattern A: User Profiles (extending Supabase Auth)
-
-```sql
--- Extend auth.users with app-specific profile data
-CREATE TABLE profiles (
-  id            UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  display_name  TEXT,
-  avatar_url    TEXT,
-  bio           TEXT,
-  timezone      TEXT DEFAULT 'UTC',
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- Auto-create profile on user signup via Supabase trigger
-CREATE OR REPLACE FUNCTION handle_new_user()
-RETURNS TRIGGER AS $$
-BEGIN
-  INSERT INTO profiles (id, display_name)
-  VALUES (NEW.id, NEW.raw_user_meta_data->>'display_name');
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION handle_new_user();
-```
-
-### Pattern B: Multi-Tenant SaaS (Organizations)
-
-```sql
--- Organization with membership and roles
-CREATE TABLE organizations (
-  id    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name  TEXT NOT NULL,
-  slug  TEXT NOT NULL UNIQUE
-);
-
-CREATE TABLE org_members (
-  organization_id  UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  user_id          UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  role             TEXT NOT NULL DEFAULT 'member'
-                   CHECK (role IN ('owner','admin','member','viewer')),
-  PRIMARY KEY (organization_id, user_id)
-);
-
--- Every tenant-scoped table includes organization_id
--- RLS filters by org membership
-```
-
-### Pattern C: Soft Delete with Active Record Views
-
-```sql
--- Create views that exclude soft-deleted rows for application use
-CREATE VIEW active_tasks AS
-  SELECT * FROM tasks WHERE deleted_at IS NULL;
-
-CREATE VIEW active_projects AS
-  SELECT * FROM projects WHERE deleted_at IS NULL;
-
--- Soft delete function
-CREATE OR REPLACE FUNCTION soft_delete()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.deleted_at = now();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-```
-
-### Pattern D: Audit Log
-
-```sql
--- See full audit_log table and trigger in Step 7 migration output
--- Query patterns:
-
--- Get full history for a specific record
-SELECT * FROM audit_log
-WHERE table_name = 'tasks' AND record_id = :task_id
-ORDER BY changed_at DESC;
-
--- Get all changes by a specific user
-SELECT * FROM audit_log
-WHERE changed_by = :user_id
-ORDER BY changed_at DESC
-LIMIT 50;
-
--- Get recent changes across all tables
-SELECT table_name, action, record_id, changed_at
-FROM audit_log
-ORDER BY changed_at DESC
-LIMIT 100;
-```
+- **RLS locks out all access after enable:** You enabled RLS without adding policies in the same migration. Always do both atomically.
+- **JOIN performance degrades on large tables:** FK columns lack indexes. Postgres does not auto-create FK indexes — add them explicitly.
+- **Polymorphic column breaks referential integrity:** Replace `commentable_type`/`commentable_id` with separate nullable FKs and a `num_nonnulls() = 1` CHECK, or use junction tables.
 
 ## Anti-Patterns
 
-| Anti-Pattern | Problem | Solution |
-|-------------|---------|----------|
-| **Using VARCHAR(n) instead of TEXT + CHECK** | VARCHAR limit is enforced at storage level, hard to change; TEXT + CHECK is flexible and explicit | Always use `TEXT` with a named CHECK constraint for length limits |
-| **No named constraints** | Anonymous constraints produce cryptic error messages (`violates check constraint "tasks_check"`) | Always use `CONSTRAINT chk_{table}_{description}` |
-| **TIMESTAMP without time zone** | Ambiguous — depends on server/session timezone. Leads to subtle bugs across time zones | Always use `TIMESTAMPTZ` |
-| **Using FLOAT/REAL for money** | Floating-point rounding errors accumulate | Use `NUMERIC(12,2)` for monetary values |
-| **Polymorphic `_type` + `_id` columns** | Cannot enforce FK constraints, no referential integrity | Use separate nullable FKs with CHECK, or junction tables |
-| **Not indexing foreign keys** | PostgreSQL does not auto-create indexes on FK columns — joins and cascading deletes become full table scans | Create an index on every FK column |
-| **Enabling RLS without adding policies** | Locks out ALL access including your application | Always add policies in the same migration as `ENABLE ROW LEVEL SECURITY` |
-| **`USING (true)` on sensitive tables** | Equivalent to no RLS — all rows visible to all authenticated users | Use specific ownership or membership conditions |
-| **Missing WITH CHECK on INSERT/UPDATE policies** | USING controls reads; without WITH CHECK, users can insert rows they should not own | Always pair USING with WITH CHECK on write operations |
-| **Storing computed values that drift** | Redundant columns (e.g., `task_count` on projects) go stale without triggers | Use a view or computed column, or maintain via trigger |
-| **Over-indexing** | Every index slows writes and consumes storage | Only index columns used in WHERE, JOIN, and ORDER BY clauses |
-| **God tables with 50+ columns** | Hard to query, slow to update, unclear ownership | Split into focused tables with 1:1 relationships |
+- VARCHAR(n) instead of TEXT + named CHECK constraint — inflexible, hard to change
+- Anonymous constraints — produce cryptic error messages, impossible to reference in migrations
+- TIMESTAMP without timezone — ambiguous, timezone-dependent bugs
+- FLOAT/REAL for money — rounding errors accumulate
+- Polymorphic `_type` + `_id` columns — no FK enforcement possible
+- Enabling RLS without policies in the same migration
+- `USING (true)` on tables with sensitive data — equivalent to no RLS
+- Missing WITH CHECK on INSERT/UPDATE policies — users can write rows they shouldn't own
+- Storing computed values without trigger maintenance — data drifts
+- Over-indexing — every index slows writes; only index columns in WHERE, JOIN, ORDER BY
+- God tables with 50+ columns — split into focused tables with 1:1 relationships
 
 ## Escalation
 
-Hand off to a specialist database architect or DBA when:
-- **Sharding or partitioning** is needed (table exceeds hundreds of millions of rows)
-- **Cross-database replication** or multi-region requirements
-- **Complex permission hierarchies** beyond 2 levels (role within role within tenant)
-- **Regulatory compliance** requires specific data residency, encryption-at-rest configurations, or audit certifications
-- **Performance tuning** at scale requires `EXPLAIN ANALYZE` expertise, query planner optimization, and connection pooling configuration
-- **Time-series data** at high ingest rates — consider TimescaleDB extension
-- **Graph relationships** (social networks, recommendation engines) — consider dedicated graph DB or recursive CTE performance limits
+Hand off to specialist DBA when: sharding/partitioning (100M+ rows), multi-region replication, permission hierarchies beyond 2 levels, regulatory data residency, query planner optimization at scale, high-ingest time-series (TimescaleDB), graph relationships exceeding recursive CTE limits.
 
 ## Inputs
 
-- Application domain and core entities
-- Entity relationships (1:1, 1:N, M:N)
-- Scale expectations (rows per table)
-- Platform (Supabase, raw PostgreSQL, PostgreSQL + ORM)
-- Multi-tenancy model
-- Authentication model
-- Soft delete and audit trail requirements
-- Existing schema constraints (if integrating)
+Domain and core entities (required), relationships, scale, platform, multi-tenancy model, auth model, soft delete/audit preferences, existing schema constraints.
 
 ## Outputs
 
-- Text-based Entity-Relationship Diagram
-- Complete CREATE TABLE statements with constraints and triggers
-- Index recommendations with rationale
-- RLS policies (if Supabase)
-- Migration-ready SQL file
-- Schema summary report
-- Common query patterns for the generated schema
+Text ERD, table definitions with named constraints/triggers, index strategy with rationale, RLS policies (if Supabase), migration-ready SQL, schema summary report.
 
 ## Level History
 
-- **Lv.1** — Base: Full schema design protocol covering entity modeling, table design conventions (naming, UUID vs serial, column types, CHECK constraints), relationship implementation (FK strategies, junction tables, self-referencing, polymorphic alternatives), indexing strategy (B-tree/GIN/GiST, composite, partial, covering, when NOT to index), RLS patterns (ownership, org multi-tenancy, role-based, public/private, inherited access), migration generation with Supabase CLI workflow, common schema patterns (profiles, multi-tenant, soft delete, audit log), anti-patterns table, escalation criteria. (Origin: MemStack v3.3, Mar 2026)
+- **Lv.1** — Base: Full schema design protocol — entity modeling, naming conventions, UUID/serial decision, column types, CHECK constraints, FK ON DELETE strategies, junction tables, polymorphic alternatives, indexing (B-tree/GIN/GiST/trigram, composite, partial, covering), RLS patterns (ownership, org, role-based, public/private, inherited), migration generation, common patterns, anti-patterns, escalation. (Origin: MemStack v3.3, Mar 2026)
+- **Lv.2** — Compressed: Creator-level density rewrite. Removed all SQL code blocks and example migrations. Converted to decision rules, constraints, and validation gates. Added Examples and Common Issues sections. (Origin: MemStack v3.4, Mar 2026)

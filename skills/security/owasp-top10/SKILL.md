@@ -1,466 +1,113 @@
 ---
 name: owasp-top10
-description: "Use when the user says 'OWASP', 'OWASP top 10', 'security audit', 'vulnerability assessment', 'full security check', 'XSS', 'SQL injection', 'SSRF', or needs a comprehensive web application security review. Do NOT use for dependency-only audits (see dependency-audit) or secrets scanning (see secrets-scanner)."
+description: "WHAT: Systematic security assessment against OWASP Top 10 (2021). WHEN: user says 'OWASP', 'security audit', 'vulnerability assessment', 'XSS', 'SQL injection', 'SSRF', or needs comprehensive web app security review. NOT: dependency-only audits (dependency-audit), secrets scanning (secrets-scanner), HTTP headers only (csp-headers)."
 ---
 
-# 🏛️ OWASP Top 10 — Web Application Security Assessment
-*Systematic security assessment against the OWASP Top 10 (2021) vulnerability categories with detection methods, code examples, and remediation for each.*
+# OWASP Top 10 -- Web Application Security Assessment
 
 ## Activation
 
-When this skill activates, output:
-
-`🏛️ OWASP Top 10 — Running comprehensive security assessment...`
-
 | Context | Status |
 |---------|--------|
-| **User says "OWASP", "security audit", "vulnerability assessment"** | ACTIVE |
-| **User mentions specific vulns: "XSS", "SQL injection", "SSRF"** | ACTIVE |
-| **User wants comprehensive application security review** | ACTIVE |
-| **User wants dependency scanning only** | DORMANT — see dependency-audit |
-| **User wants secrets scanning only** | DORMANT — see secrets-scanner |
-| **User wants HTTP headers only** | DORMANT — see csp-headers |
+| "OWASP", "security audit", "vulnerability assessment" | ACTIVE |
+| Specific vulns: "XSS", "SQL injection", "SSRF" | ACTIVE |
+| Comprehensive application security review | ACTIVE |
+| Dependency scanning only | DORMANT -- see dependency-audit |
+| Secrets scanning only | DORMANT -- see secrets-scanner |
+| HTTP headers only | DORMANT -- see csp-headers |
 
-## Protocol
+## Instructions
 
 ### Step 1: Gather Inputs
 
-- **Tech stack**: Language, framework, database, hosting
-- **Application type**: API, SPA, SSR, monolith, microservices
-- **Authentication**: Session-based, JWT, OAuth, API keys
-- **Data sensitivity**: PII, financial, healthcare, public
-- **Scope**: Full app, specific module, or code review of PR
-
-### Step 2: Assess Each OWASP Category
-
----
-
-#### A01:2021 — Broken Access Control
-
-**What**: Users acting outside their intended permissions — accessing other users' data, elevating privileges, or bypassing access checks.
-
-**Detection:**
-```bash
-# Find routes/endpoints missing auth middleware
-grep -rn "router\.\(get\|post\|put\|delete\)" --include="*.js" --include="*.ts" | grep -v "auth\|protect\|guard\|middleware"
-
-# Find direct object references without ownership checks
-grep -rn "params\.id\|params\.userId\|req\.params" --include="*.js" --include="*.ts" | grep -v "auth\.uid\|req\.user\|session\.user"
-```
-
-**Vulnerable vs Fixed:**
-```javascript
-// ❌ VULNERABLE — IDOR: any user can access any invoice
-app.get('/api/invoices/:id', async (req, res) => {
-  const invoice = await db.query('SELECT * FROM invoices WHERE id = $1', [req.params.id]);
-  res.json(invoice);
-});
-
-// ✅ FIXED — ownership check
-app.get('/api/invoices/:id', authenticate, async (req, res) => {
-  const invoice = await db.query(
-    'SELECT * FROM invoices WHERE id = $1 AND user_id = $2',
-    [req.params.id, req.user.id]
-  );
-  if (!invoice) return res.status(404).json({ error: 'Not found' });
-  res.json(invoice);
-});
-```
-
-**Checklist:**
-- [ ] Every endpoint has authentication middleware
-- [ ] Object access includes ownership/permission check
-- [ ] Admin endpoints verify admin role server-side
-- [ ] CORS is configured to allow only trusted origins
-- [ ] Directory listing is disabled on web servers
-- [ ] JWT tokens are validated on every request (not just at login)
-
----
-
-#### A02:2021 — Cryptographic Failures
-
-**What**: Weak or missing encryption for sensitive data — plaintext passwords, weak hashing, exposed data in transit.
-
-**Detection:**
-```bash
-# Find plaintext password storage
-grep -rn "password" --include="*.js" --include="*.ts" --include="*.py" | grep -iE "(= |:.*req\.|\.body\.|insert|update)" | grep -v "hash\|bcrypt\|argon\|scrypt"
-
-# Find weak crypto
-grep -rn "md5\|sha1\|DES\|RC4\|createCipher(" --include="*.js" --include="*.ts" --include="*.py"
-
-# Find hardcoded encryption keys
-grep -rn "encryption_key\|secret_key\|AES_KEY" --include="*.js" --include="*.ts" --include="*.py" | grep -E '=\s*["\x27]'
-```
-
-**Vulnerable vs Fixed:**
-```python
-# ❌ VULNERABLE — MD5 password hash (fast, crackable)
-import hashlib
-password_hash = hashlib.md5(password.encode()).hexdigest()
-
-# ✅ FIXED — bcrypt with cost factor
-import bcrypt
-password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=12))
-```
-
-**Checklist:**
-- [ ] Passwords hashed with bcrypt, argon2, or scrypt (NOT MD5/SHA1/SHA256)
-- [ ] All traffic over HTTPS (TLS 1.2+ minimum, prefer 1.3)
-- [ ] Sensitive data encrypted at rest (database, backups)
-- [ ] No sensitive data in URLs (tokens, passwords in query strings)
-- [ ] Encryption keys stored in environment variables, not code
-- [ ] Old/weak cipher suites disabled
-
----
-
-#### A03:2021 — Injection
-
-**What**: Untrusted data sent to an interpreter as part of a command — SQL injection, NoSQL injection, OS command injection, LDAP injection.
-
-**Detection:**
-```bash
-# SQL injection — string concatenation in queries
-grep -rn "query.*\`\|query.*+ \|query.*%s\|query.*format\|execute.*f'" --include="*.js" --include="*.ts" --include="*.py" | grep -v "parameterized\|\$[0-9]\|?"
-
-# Command injection
-grep -rn "exec(\|execSync\|spawn(\|system(\|popen(\|os\.system\|subprocess\.call\|child_process" --include="*.js" --include="*.ts" --include="*.py"
-
-# Template injection
-grep -rn "render.*req\.\|template.*req\.\|eval(\|Function(" --include="*.js" --include="*.ts"
-```
-
-**Vulnerable vs Fixed:**
-```javascript
-// ❌ VULNERABLE — SQL injection via string concatenation
-const user = await db.query(`SELECT * FROM users WHERE email = '${req.body.email}'`);
-
-// ✅ FIXED — parameterized query
-const user = await db.query('SELECT * FROM users WHERE email = $1', [req.body.email]);
-```
-
-```python
-# ❌ VULNERABLE — command injection
-import os
-os.system(f"convert {user_filename} output.png")
-
-# ✅ FIXED — use subprocess with argument list (no shell)
-import subprocess
-subprocess.run(["convert", user_filename, "output.png"], check=True)
-```
-
-**Checklist:**
-- [ ] All SQL uses parameterized queries or ORM (never string concatenation)
-- [ ] User input never passed to OS commands (use libraries instead)
-- [ ] Template rendering uses auto-escaping
-- [ ] Input validation on all user-supplied data (type, length, range)
-- [ ] ORM used where possible to abstract SQL
-
----
-
-#### A04:2021 — Insecure Design
-
-**What**: Missing or ineffective security controls at the design level — no rate limiting, no account lockout, no fraud detection, threat modeling gaps.
-
-**Assessment questions:**
-- Is there rate limiting on login, registration, and password reset?
-- Is there account lockout after N failed login attempts?
-- Can a user enumerate valid email addresses via registration/reset?
-- Are business logic flows protected against abuse (e.g., coupon reuse, price manipulation)?
-- Is there a threat model documented for the application?
-
-**Key patterns:**
-```javascript
-// ❌ INSECURE DESIGN — no rate limiting on login
-app.post('/api/login', async (req, res) => {
-  const user = await authenticate(req.body.email, req.body.password);
-  // Attacker can brute-force passwords unlimited
-});
-
-// ✅ SECURE DESIGN — rate limiting + account lockout
-const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5 });
-app.post('/api/login', loginLimiter, async (req, res) => {
-  const failedAttempts = await getFailedAttempts(req.body.email);
-  if (failedAttempts >= 5) return res.status(423).json({ error: 'Account locked. Try again in 15 minutes.' });
-  // ... authenticate
-});
-```
-
-**Checklist:**
-- [ ] Rate limiting on authentication endpoints
-- [ ] Account lockout after repeated failures
-- [ ] Consistent error messages (don't reveal if email exists)
-- [ ] Business logic abuse protection (can't reuse coupons, manipulate prices)
-- [ ] Threat model exists and is reviewed with changes
-
----
-
-#### A05:2021 — Security Misconfiguration
-
-**What**: Default configs, unnecessary features enabled, missing security hardening, verbose error messages in production.
-
-**Detection:**
-```bash
-# Debug mode in production
-grep -rn "DEBUG.*=.*True\|NODE_ENV.*development\|debug:\s*true" --include="*.py" --include="*.js" --include="*.env"
-
-# Default credentials
-grep -rn "admin:admin\|root:root\|password:password\|default.*password" --include="*.js" --include="*.py" --include="*.yaml" --include="*.yml"
-
-# Verbose errors exposed
-grep -rn "stack.*trace\|\.stack\|traceback\|res\.send.*err\)" --include="*.js" --include="*.ts"
-
-# Unnecessary HTTP methods
-curl -X OPTIONS https://example.com/api/users -i
-```
-
-**Checklist:**
-- [ ] Debug mode OFF in production
-- [ ] Error messages don't expose stack traces, SQL, or internal paths
-- [ ] Default accounts/passwords changed or removed
-- [ ] Directory listing disabled
-- [ ] Unnecessary HTTP methods disabled (TRACE, OPTIONS where unneeded)
-- [ ] Security headers configured (see csp-headers skill)
-- [ ] Admin interfaces not publicly accessible
-- [ ] Server version headers removed (`Server:`, `X-Powered-By:`)
-
----
-
-#### A06:2021 — Vulnerable and Outdated Components
-
-**What**: Using libraries, frameworks, or platforms with known vulnerabilities.
-
-*See the **dependency-audit** skill for comprehensive coverage.* Quick checks:
-
-```bash
-npm audit          # Node.js
-pip-audit          # Python
-cargo audit        # Rust
-bundle audit check # Ruby
-```
-
-**Checklist:**
-- [ ] Dependencies scanned for known CVEs
-- [ ] No end-of-life frameworks or runtimes
-- [ ] Lock files committed and reviewed
-- [ ] Automated dependency updates configured (Dependabot, Renovate)
-
----
-
-#### A07:2021 — Identification and Authentication Failures
-
-**What**: Weak authentication — permits brute force, allows weak passwords, poor session management, credential stuffing.
-
-**Detection:**
-```bash
-# Weak password requirements
-grep -rn "password.*length\|minlength\|min.*pass" --include="*.js" --include="*.ts" --include="*.py"
-
-# Session management issues
-grep -rn "cookie\|session\|jwt\|token" --include="*.js" --include="*.ts" | grep -iE "(httponly|secure|samesite|maxage|expires)"
-```
-
-**Vulnerable vs Fixed:**
-```javascript
-// ❌ VULNERABLE — no password requirements, session never expires
-app.post('/register', async (req, res) => {
-  await createUser(req.body.email, req.body.password); // accepts "123"
-  req.session.userId = user.id; // no expiry set
-});
-
-// ✅ FIXED — strong password, secure session
-app.post('/register', async (req, res) => {
-  if (req.body.password.length < 12) return res.status(400).json({ error: 'Minimum 12 characters' });
-  const hash = await bcrypt.hash(req.body.password, 12);
-  await createUser(req.body.email, hash);
-  req.session.userId = user.id;
-  req.session.cookie.maxAge = 24 * 60 * 60 * 1000; // 24h
-  req.session.cookie.httpOnly = true;
-  req.session.cookie.secure = true;
-  req.session.cookie.sameSite = 'lax';
-});
-```
-
-**Checklist:**
-- [ ] Minimum password length 12+ characters
-- [ ] Multi-factor authentication available for sensitive accounts
-- [ ] Session tokens are random, long, and invalidated on logout
-- [ ] Cookies set with `HttpOnly`, `Secure`, `SameSite`
-- [ ] Password reset tokens expire (15-30 minutes)
-- [ ] Brute force protection on all auth endpoints
-- [ ] Credential stuffing protection (rate limiting, CAPTCHA after failures)
-
----
-
-#### A08:2021 — Software and Data Integrity Failures
-
-**What**: Code and infrastructure that doesn't verify integrity — CI/CD pipeline poisoning, unsigned updates, insecure deserialization.
-
-**Detection:**
-```bash
-# Insecure deserialization
-grep -rn "JSON\.parse\|pickle\.load\|yaml\.load\|unserialize\|eval(" --include="*.js" --include="*.ts" --include="*.py" --include="*.php"
-
-# CI/CD using untrusted actions
-grep -rn "uses:" .github/workflows/*.yml | grep -v "actions/\|github/"
-
-# Subresource integrity missing
-grep -rn "<script.*src=.*http" --include="*.html" | grep -v "integrity="
-```
-
-**Checklist:**
-- [ ] CI/CD pipeline actions pinned to specific SHA (not `@latest` or `@main`)
-- [ ] Subresource Integrity (SRI) on CDN-loaded scripts/styles
-- [ ] No `eval()`, `pickle.load()`, or `yaml.load()` on untrusted data
-- [ ] Software updates verified with signatures
-- [ ] Database migrations reviewed before execution
-
----
-
-#### A09:2021 — Security Logging and Monitoring Failures
-
-**What**: Insufficient logging of security events, no alerting on suspicious activity, inability to detect breaches.
-
-**What to log:**
-| Event | Log? | Alert? |
-|-------|------|--------|
-| Login success | ✅ | No |
-| Login failure | ✅ | After 5+ from same IP |
-| Password change | ✅ | ✅ notify user |
-| Permission change | ✅ | ✅ |
-| Admin action | ✅ | Depends |
-| Data export/download | ✅ | ✅ if bulk |
-| API rate limit hit | ✅ | After pattern |
-| 401/403 errors | ✅ | After 10+ from same source |
-| Input validation failure | ✅ | After pattern (may indicate probing) |
-
-**Checklist:**
-- [ ] Authentication events logged (success and failure)
-- [ ] Authorization failures logged with user context
-- [ ] Logs include timestamp, user ID, IP, action, resource
-- [ ] Logs do NOT contain passwords, tokens, or full credit card numbers
-- [ ] Log aggregation and alerting configured
-- [ ] Logs retained for incident investigation (90+ days)
-- [ ] Log tampering protection (append-only, separate system)
-
----
-
-#### A10:2021 — Server-Side Request Forgery (SSRF)
-
-**What**: Application fetches a URL supplied by the user, allowing attackers to reach internal services, cloud metadata, or localhost.
-
-**Detection:**
-```bash
-# Find URL fetching from user input
-grep -rn "fetch(\|axios\.\|request(\|urllib\|requests\.\(get\|post\)\|http\.\(get\|request\)" --include="*.js" --include="*.ts" --include="*.py" | grep -iE "req\.\|body\.\|params\.\|query\."
-```
-
-**Vulnerable vs Fixed:**
-```javascript
-// ❌ VULNERABLE — fetches any URL the user provides
-app.post('/api/preview', async (req, res) => {
-  const response = await fetch(req.body.url);  // Can fetch http://169.254.169.254/latest/meta-data/
-  res.json({ content: await response.text() });
-});
-
-// ✅ FIXED — URL allowlist + block internal ranges
-const { URL } = require('url');
-const ipRangeCheck = require('ip-range-check');
-
-const BLOCKED_RANGES = ['127.0.0.0/8', '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '169.254.0.0/16', '0.0.0.0/8'];
-
-app.post('/api/preview', async (req, res) => {
-  const parsed = new URL(req.body.url);
-  if (!['http:', 'https:'].includes(parsed.protocol)) return res.status(400).json({ error: 'Invalid protocol' });
-  const resolved = await dns.resolve4(parsed.hostname);
-  if (resolved.some(ip => ipRangeCheck(ip, BLOCKED_RANGES))) return res.status(400).json({ error: 'Blocked' });
-  const response = await fetch(req.body.url, { redirect: 'error' });
-  res.json({ content: await response.text() });
-});
-```
-
-**Checklist:**
-- [ ] User-supplied URLs validated against allowlist
-- [ ] Internal IP ranges blocked (127.x, 10.x, 172.16.x, 192.168.x, 169.254.x)
-- [ ] Cloud metadata endpoints blocked (169.254.169.254)
-- [ ] Redirects not followed (or re-validated after redirect)
-- [ ] DNS rebinding protection (resolve then fetch, don't fetch URL directly)
-- [ ] Protocol restricted to HTTP/HTTPS only
-
----
-
-### Step 3: Severity Classification
-
-| Finding | Severity | Criteria |
-|---------|----------|----------|
-| 🔴 Critical | P0 — Fix now | Active exploitation possible, data breach risk, auth bypass |
-| 🟠 High | P1 — Fix this week | Privilege escalation, injection, SSRF to internal services |
-| 🟡 Medium | P2 — Fix this sprint | Information disclosure, weak crypto, missing rate limits |
-| 🟢 Low | P3 — Fix in backlog | Missing headers, verbose errors, minor misconfigs |
-
-### Step 4: Output
-
-```
-━━━ OWASP TOP 10 SECURITY ASSESSMENT ━━━━
-
-── SUMMARY ───────────────────────────────
-Application: [name]
-Stack: [tech stack]
-Categories assessed: 10/10
-Findings: [N] (Critical: X, High: Y, Medium: Z, Low: W)
-
-── FINDINGS BY CATEGORY ──────────────────
-A01 Broken Access Control:     [✅ Pass / 🔴 X findings]
-A02 Cryptographic Failures:    [✅ Pass / 🔴 X findings]
-A03 Injection:                 [✅ Pass / 🔴 X findings]
-A04 Insecure Design:           [✅ Pass / 🟡 X findings]
-A05 Security Misconfiguration: [✅ Pass / 🟡 X findings]
-A06 Vulnerable Components:     [✅ Pass / 🟡 X findings]
-A07 Authentication Failures:   [✅ Pass / 🔴 X findings]
-A08 Data Integrity Failures:   [✅ Pass / 🟡 X findings]
-A09 Logging Failures:          [✅ Pass / 🟢 X findings]
-A10 SSRF:                      [✅ Pass / 🔴 X findings]
-
-── DETAILED FINDINGS ─────────────────────
-[per-finding: category, severity, location, description, fix]
-
-── REMEDIATION PRIORITY ──────────────────
-P0: [immediate fixes]
-P1: [this week]
-P2: [this sprint]
-P3: [backlog]
-```
+Collect: tech stack (language, framework, DB, host), app type (API/SPA/SSR/monolith/microservices), auth mechanism (session/JWT/OAuth/API key), data sensitivity (PII/financial/healthcare/public), scope (full app/module/PR).
+
+**Gate:** Do not proceed without stack and auth mechanism confirmed.
+
+### Step 2: Assess All 10 Categories
+
+For each category: search codebase for violation patterns, classify severity, note location.
+
+**A01 Broken Access Control** -- Check: routes missing auth middleware; direct object references without ownership filter; admin endpoints lacking role verification server-side; CORS origin allowlist; JWT validated on every request not just login. Framework notes: Express -- middleware ordering matters, missing `next()` silently passes; Django -- `@login_required` is not `@permission_required`; Next.js -- API routes have no default auth; Supabase -- see rls-checker skill.
+
+**A02 Cryptographic Failures** -- Check: password hashing algorithm (must be bcrypt/argon2/scrypt, reject MD5/SHA1/SHA256); TLS 1.2+ enforced; sensitive data encrypted at rest; no secrets in URLs/query strings; no hardcoded encryption keys. Framework notes: Django `SECRET_KEY` in settings.py not env = critical; Node `crypto.createCipher` is deprecated, must use `createCipheriv`.
+
+**A03 Injection** -- Check: SQL via string concatenation/template literals (must be parameterized or ORM); OS command via `exec`/`system`/`popen` with user input; template injection via unescaped rendering. Framework notes: ORMs prevent SQL injection but raw query methods don't (Django `raw()`, Sequelize `literal()`); React auto-escapes JSX but `dangerouslySetInnerHTML` bypasses it.
+
+**A04 Insecure Design** -- Check: rate limiting on auth endpoints; account lockout after N failures; user enumeration via registration/reset error messages; business logic abuse (coupon reuse, price manipulation); threat model existence. Not a code bug -- a missing control at the design level.
+
+**A05 Security Misconfiguration** -- Check: debug mode in production; stack traces in error responses; default credentials; unnecessary HTTP methods (TRACE); server version headers (`X-Powered-By`, `Server`); admin interfaces publicly accessible. Framework notes: Django `DEBUG=True` leaks settings; Express sends `X-Powered-By: Express` by default; Rails `config.consider_all_requests_local`.
+
+**A06 Vulnerable Components** -- Delegate to dependency-audit skill for full coverage. Quick check: run platform's native audit command (`npm audit`, `pip-audit`, `cargo audit`). Verify: no EOL runtimes, lock files committed, automated updates configured (Dependabot/Renovate).
+
+**A07 Authentication Failures** -- Check: password minimum length (12+ chars); session cookie flags (`HttpOnly`, `Secure`, `SameSite`); token expiry (sessions 24h, reset tokens 15-30min); MFA availability for sensitive accounts; brute force protection on all auth endpoints. Framework notes: Express `express-session` defaults lack `secure` flag; Passport.js doesn't handle rate limiting.
+
+**A08 Data Integrity Failures** -- Check: `eval()`/`pickle.load()`/`yaml.load()` on untrusted data; CI/CD actions pinned to SHA not `@latest`; CDN scripts have Subresource Integrity (SRI); database migrations reviewed before execution. Framework notes: Python `yaml.safe_load()` is safe, `yaml.load()` is not; PHP `unserialize()` on user data = RCE.
+
+**A09 Logging and Monitoring Failures** -- Check: auth events logged (success + failure); authorization failures logged with user context; logs include timestamp/userID/IP/action/resource; logs exclude passwords/tokens/card numbers; log aggregation and alerting configured; 90+ day retention; tamper protection. Alert thresholds: 5+ login failures same IP, any permission change, bulk data export.
+
+**A10 SSRF** -- Check: user-supplied URLs validated against allowlist; internal IP ranges blocked (127.x, 10.x, 172.16.x, 192.168.x, 169.254.x); cloud metadata blocked (169.254.169.254); redirects re-validated or blocked; DNS rebinding protection (resolve-then-fetch); protocol restricted to HTTP/HTTPS. Framework notes: any `fetch`/`axios`/`requests` call taking user input is a candidate.
+
+**Gate:** All 10 categories assessed before proceeding to classification.
+
+### Step 3: Classify Severity
+
+| Severity | Priority | Criteria |
+|----------|----------|----------|
+| Critical | P0 -- fix now | Active exploitation possible, data breach risk, auth bypass |
+| High | P1 -- fix this week | Privilege escalation, injection, SSRF to internal services |
+| Medium | P2 -- fix this sprint | Info disclosure, weak crypto, missing rate limits |
+| Low | P3 -- backlog | Missing headers, verbose errors, minor misconfigs |
+
+**Gate:** Every finding has a severity assigned before output.
+
+### Step 4: Verify Remediations
+
+For each finding: confirm the fix addresses the pattern not just the instance. One SQL injection via concatenation means grep the entire codebase for the same pattern. Verify: parameterized queries adopted project-wide, not just at the reported location. Rerun the detection check to confirm zero matches.
+
+### Step 5: Output Report
+
+Format: summary (app name, stack, 10/10 assessed, finding counts by severity), category-by-category pass/fail with finding counts, detailed findings (category, severity, file:line, description, remediation), prioritized remediation plan (P0 through P3).
+
+## Examples
+
+**Express API with JWT auth:** Gather stack (Node/Express/PostgreSQL/JWT). A01: grep routes for missing auth middleware. A03: grep for template literal SQL. A07: check JWT expiry and cookie flags. A10: check if any endpoint fetches user-supplied URLs. Report findings with file locations and severity.
+
+**Django SPA backend:** Gather stack (Python/Django/React/session auth). A02: check `SECRET_KEY` not hardcoded. A03: grep for `.raw()` and `.extra()` calls. A05: verify `DEBUG=False` in production settings. A09: check Django logging config captures auth events. Cross-reference with `settings.py` and middleware ordering.
+
+## Common Issues
+
+1. **ORM false safety** -- Teams assume ORM = no injection, but raw query escape hatches (`raw()`, `literal()`, `extra()`) reintroduce it. Always grep for raw query methods alongside string concatenation.
+2. **Client-side auth checks only** -- Frontend route guards without server-side middleware. The route renders correctly but the API endpoint is wide open.
+3. **Fixing instances not patterns** -- Patching one SQL injection while 12 others exist in the same codebase. The detection step must be project-wide, not file-scoped.
 
 ## Anti-Patterns
 
-- **Security by obscurity**: Hiding admin panels at `/admin-secret-path` is not access control. Always enforce authentication.
-- **Client-side-only validation**: Everything on the client can be bypassed. Always validate server-side.
-- **Trusting JWTs without verification**: Always verify the signature, issuer, audience, and expiration server-side.
-- **Fixing only the specific finding, not the pattern**: One SQL injection means others likely exist. Fix the pattern (adopt parameterized queries everywhere), not just the instance.
-- **Penetration testing as the only security measure**: Pen tests find known patterns. Threat modeling and code review catch design flaws that automated tools miss.
+- Security by obscurity (hidden admin paths instead of auth enforcement)
+- Client-side-only validation (everything bypassable via curl/Postman)
+- Trusting JWTs without server-side signature/issuer/audience/expiry verification
+- Pen testing as sole security measure (misses design flaws that code review catches)
+- Fixing the finding not the pattern (one injection = assume more exist)
 
 ## Escalation
 
-Hand off to a security professional when:
-- Critical findings in production with evidence of exploitation
-- Complex authentication/authorization architecture needs design review
-- Compliance requirements (PCI-DSS, HIPAA, SOC 2) mandate certified assessors
-- Custom cryptographic implementations need expert review
-- Active incident response is needed (breach detected)
+Hand off to security professional when: critical findings in production with exploitation evidence; complex auth architecture needs design review; compliance mandates certified assessors (PCI-DSS, HIPAA, SOC 2); custom crypto implementations; active incident response needed.
 
 ## Inputs
+
 - Codebase access and tech stack
 - Application type and architecture
 - Authentication mechanism
 - Data sensitivity classification
 
 ## Outputs
-- Category-by-category assessment (10/10 OWASP categories)
-- Findings with severity, location, description, and fix
-- Vulnerable vs fixed code examples for each finding
-- Prioritized remediation plan
-- Security checklists for ongoing compliance
+
+- 10/10 category assessment with pass/fail and finding counts
+- Findings with severity, file:line location, description, and remediation
+- Prioritized remediation plan (P0-P3)
+- Scan tool recommendations by category: SAST (static analysis -- semgrep, CodeQL) for A01-A03/A08/A10; DAST (dynamic testing -- OWASP ZAP, Burp) for A04/A05/A07; SCA (composition analysis -- npm audit, Snyk) for A06
 
 ## Level History
 
-- **Lv.1** — Base: Full OWASP Top 10 2021 assessment with detection commands, vulnerable/fixed code examples for each category, severity classification, checklists per category, remediation priority matrix. (Origin: MemStack v3.3, Mar 2026)
+- **Lv.1** -- Base: Full OWASP Top 10 2021 assessment with detection commands, vulnerable/fixed code examples for each category, severity classification, checklists per category, remediation priority matrix. (Origin: MemStack v3.3, Mar 2026)
+- **Lv.2** -- Compressed: Decision-rule format, validation gates, framework-specific gotchas, pattern-not-instance remediation verification, scan tool categorization (SAST/DAST/SCA), removed tutorial code blocks. (Origin: MemStack v3.4, Mar 2026)

@@ -1,268 +1,135 @@
 ---
 name: domain-ssl
-description: "Use when the user says 'domain', 'DNS', 'SSL', 'HTTPS', 'custom domain', 'certificate', 'Let's Encrypt', 'SPF', 'DKIM', 'DMARC', or needs to configure domains, DNS records, or SSL/TLS. Do NOT use for full deployment workflows (see railway-deploy, netlify-deploy)."
+description: "Configure custom domains, DNS records, SSL/TLS certificates, and email authentication. WHEN: user says 'domain', 'DNS', 'SSL', 'HTTPS', 'custom domain', 'certificate', 'Let's Encrypt', 'SPF', 'DKIM', 'DMARC'. NOT WHEN: full deployment workflow (see railway-deploy, netlify-deploy), security headers (see csp-headers)."
 ---
 
-# 🌐 Domain & SSL — DNS Configuration & TLS Setup
-*Configure custom domains, DNS records, SSL/TLS certificates, and email authentication for any hosting provider.*
+# Domain & SSL — DNS Configuration & TLS Setup
 
 ## Activation
 
-When this skill activates, output:
-
-`🌐 Domain & SSL — Configuring domain and SSL/TLS...`
-
 | Context | Status |
 |---------|--------|
-| **User says "domain", "DNS", "SSL", "HTTPS"** | ACTIVE |
-| **User says "Let's Encrypt", "certificate", "custom domain"** | ACTIVE |
-| **User says "SPF", "DKIM", "DMARC", "email DNS"** | ACTIVE |
-| **User wants full app deployment** | DORMANT — see railway-deploy or netlify-deploy |
-| **User wants security headers** | DORMANT — see csp-headers |
+| User says "domain", "DNS", "SSL", "HTTPS", "custom domain" | ACTIVE |
+| User says "Let's Encrypt", "certificate", "SPF", "DKIM", "DMARC" | ACTIVE |
+| Full app deployment | DORMANT — see railway-deploy, netlify-deploy |
+| Security headers, CSP, HSTS-only | DORMANT — see csp-headers |
 
-## Protocol
+## Instructions
 
 ### Step 1: Gather Inputs
 
-- **Domain name**: What domain/subdomains?
-- **Registrar**: Where is the domain registered? (Cloudflare, Namecheap, GoDaddy, etc.)
-- **Hosting**: Where does the app run? (Railway, Netlify, Hetzner, AWS, etc.)
-- **Email**: Does the domain send email? (transactional, marketing, or none)
-- **CDN**: Using Cloudflare, Fastly, or direct?
+Collect: domain name, registrar, hosting provider, email services (if any), CDN preference.
 
-### Step 2: DNS Records
+**Gate:** Do not proceed without domain + hosting provider confirmed.
 
-**Essential record types:**
+### Step 2: DNS Record Type Decision
 
-| Type | Purpose | Example |
-|------|---------|---------|
-| `A` | Points domain to IPv4 | `@ → 1.2.3.4` |
-| `AAAA` | Points domain to IPv6 | `@ → 2001:db8::1` |
-| `CNAME` | Alias to another domain | `www → myapp.netlify.app` |
-| `MX` | Email server | `@ → mx1.provider.com` (priority 10) |
-| `TXT` | Verification, SPF, DKIM | `@ → "v=spf1 include:_spf.google.com ~all"` |
-| `CAA` | Restrict certificate issuers | `@ → 0 issue "letsencrypt.org"` |
-| `SRV` | Service discovery | `_sip._tcp → 10 5 5060 sip.example.com` |
+Choose record type by this decision tree:
 
-**Common setups:**
+| Condition | Record Type |
+|-----------|-------------|
+| Pointing root (`@`) to a known static IP (VPS, dedicated) | A / AAAA |
+| Pointing root (`@`) to a PaaS that provides no IP (Railway, Netlify, Vercel) | ALIAS (if registrar supports) or A to their load balancer IP |
+| Pointing subdomain (`www`, `api`, etc.) to another hostname | CNAME |
+| Registrar does not support ALIAS and PaaS has no stable IP | Use registrar's built-in redirect for root; CNAME for `www` |
 
-```
-# App on Railway/Render (CNAME)
-www     CNAME   myapp.up.railway.app
-@       A       <railway IP>  (or use redirect)
+Always configure both `@` and `www`. Redirect one to the other. Set CAA records to restrict certificate issuers.
 
-# App on Netlify
-www     CNAME   mysite.netlify.app
-@       A       75.2.60.5     (Netlify load balancer)
+**Gate:** Verify propagation before proceeding. Use `dig @8.8.8.8` for cache-bypass checks and a global propagation checker. Do not proceed to SSL until DNS resolves correctly from at least 3 geographically distributed resolvers.
 
-# App on Hetzner VPS
-@       A       <server IP>
-www     A       <server IP>
+### Step 3: SSL Certificate Type Decision
 
-# Subdomain for API
-api     CNAME   api.myapp.railway.app
-```
+| Condition | Certificate Type |
+|-----------|-----------------|
+| PaaS with managed SSL (Netlify, Vercel, Railway, Cloudflare) | Use platform-managed — no manual cert needed |
+| VPS/dedicated with auto-HTTPS server (Caddy) | Use Caddy's built-in ACME — zero config |
+| VPS/dedicated with nginx/Apache | Let's Encrypt via certbot |
+| Multiple subdomains under one cert | Wildcard cert (requires DNS-01 challenge) |
+| Regulatory/compliance requirement for identity validation | EV or OV cert from commercial CA |
+| Internal services only | Self-signed or internal CA (never for public) |
 
-**Verify propagation:**
-```bash
-# Check A record
-dig +short example.com A
+**Gate:** Certificate must be issued and serving before configuring HSTS.
 
-# Check CNAME
-dig +short www.example.com CNAME
+### Step 4: HTTPS Redirect & HSTS
 
-# Check all records
-dig example.com ANY
+**Redirect enforcement rules:**
+- All HTTP must 301-redirect to HTTPS. No exceptions for public-facing domains.
+- Redirect must preserve path and query string.
+- If behind Cloudflare proxy, use "Always Use HTTPS" setting instead of server-level redirect to avoid redirect loops.
 
-# Check from specific DNS (bypass cache)
-dig @8.8.8.8 example.com A
+**HSTS configuration rules:**
+- Start with `max-age=86400` (1 day). Only increase after confirming no mixed content.
+- Add `includeSubDomains` only when ALL subdomains support HTTPS.
+- Add `preload` only after sustained `max-age=31536000` and submit to hstspreload.org.
+- HSTS misconfiguration is hard to undo — browsers cache the policy for `max-age` duration.
 
-# Check propagation globally
-# Use: https://www.whatsmydns.net/
-```
+**Gate:** Test for mixed content (HTTP resources on HTTPS pages) before enabling HSTS. Mixed content breaks pages silently.
 
-### Step 3: SSL/TLS Configuration
+### Step 5: Certificate Renewal Automation
 
-**Let's Encrypt with Certbot:**
-```bash
-# Install
-sudo apt install certbot python3-certbot-nginx  # or python3-certbot-apache
+**Decision rules:**
+- Platform-managed certs: no action needed — provider handles renewal.
+- Certbot: verify auto-renewal timer exists (`systemctl list-timers | grep certbot`). If missing, add cron/systemd timer for twice-daily renewal check.
+- Caddy: automatic — no action needed.
+- Wildcard certs: renewal requires DNS-01 challenge automation (certbot DNS plugin for your registrar, or acme.sh with DNS API).
+- Set up monitoring alert when cert expiry < 30 days as a safety net regardless of automation.
 
-# Get certificate (nginx)
-sudo certbot --nginx -d example.com -d www.example.com
+### Step 6: Multi-Domain & Subdomain Strategy
 
-# Get certificate (standalone, no web server)
-sudo certbot certonly --standalone -d example.com
+| Pattern | Approach |
+|---------|----------|
+| Single app, root + www | One cert covering both names |
+| Multiple apps on subdomains (`api.`, `app.`, `admin.`) | One wildcard cert OR individual certs per subdomain |
+| Multiple unrelated domains on same server | Separate cert per domain (SNI handles routing) |
+| Staging/preview environments | Wildcard on `*.staging.example.com` |
 
-# Wildcard certificate (requires DNS challenge)
-sudo certbot certonly --manual --preferred-challenges dns -d "*.example.com" -d example.com
+For email-sending domains, add SPF, DKIM, and DMARC TXT records. Start DMARC at `p=none`, tighten only after monitoring.
 
-# Auto-renewal (usually installed automatically)
-sudo certbot renew --dry-run
-# Cron: 0 0 1 * * certbot renew --quiet
-```
+### Step 7: Verify & Output
 
-**Caddy (automatic HTTPS):**
-```
-# Caddy handles SSL automatically — just specify the domain
-example.com {
-    reverse_proxy localhost:3000
-}
-# That's it. Caddy gets and renews certs from Let's Encrypt automatically.
-```
+Provide: DNS records to set, SSL method chosen, HSTS header value, renewal approach, verification commands, and any email DNS records needed.
 
-**Nginx SSL config (after certbot):**
-```nginx
-server {
-    listen 443 ssl http2;
-    server_name example.com www.example.com;
+## Examples
 
-    ssl_certificate /etc/letsencrypt/live/example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/example.com/privkey.pem;
+**PaaS subdomain:** User deploys on Railway, wants `api.example.com`. Decision: CNAME to Railway hostname, platform-managed SSL, no certbot needed. Add CAA restricting to Railway's CA. HSTS after confirming cert serves correctly.
 
-    # TLS 1.2+ only (1.3 preferred)
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
-    ssl_prefer_server_ciphers off;
+**VPS multi-subdomain:** User runs nginx on Hetzner, wants `example.com` + `www` + `api` + `staging`. Decision: A record for root, CNAMEs for subs, wildcard Let's Encrypt cert with DNS-01 via Cloudflare API plugin, certbot auto-renewal timer, HSTS with `includeSubDomains` after verifying all subs serve HTTPS.
 
-    # OCSP Stapling
-    ssl_stapling on;
-    ssl_stapling_verify on;
-    resolver 1.1.1.1 8.8.8.8;
+## Common Issues
 
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-
-# Redirect HTTP to HTTPS
-server {
-    listen 80;
-    server_name example.com www.example.com;
-    return 301 https://$host$request_uri;
-}
-```
-
-### Step 4: Email DNS (SPF, DKIM, DMARC)
-
-**SPF (who can send email from your domain):**
-```
-# TXT record on @
-v=spf1 include:_spf.google.com include:sendgrid.net ~all
-
-# Common includes:
-# Google Workspace: include:_spf.google.com
-# Microsoft 365:    include:spf.protection.outlook.com
-# SendGrid:         include:sendgrid.net
-# Mailgun:          include:mailgun.org
-# Postmark:         include:spf.mtasv.net
-```
-
-**DKIM (cryptographic email verification):**
-```
-# TXT record — provider gives you the name and value
-# Example for SendGrid:
-s1._domainkey    TXT    "k=rsa; p=MIGfMA0GCSqGSIb3..."
-```
-
-**DMARC (policy for failed SPF/DKIM):**
-```
-# TXT record on _dmarc
-_dmarc    TXT    "v=DMARC1; p=quarantine; rua=mailto:dmarc@example.com; pct=100"
-
-# Policy options:
-# p=none       — monitor only (start here)
-# p=quarantine — send to spam
-# p=reject     — reject entirely (strictest)
-```
-
-**Verification:**
-```bash
-# Check SPF
-dig +short example.com TXT | grep spf
-
-# Check DKIM
-dig +short s1._domainkey.example.com TXT
-
-# Check DMARC
-dig +short _dmarc.example.com TXT
-
-# Test deliverability: send test email to mail-tester.com
-```
-
-### Step 5: Certificate Monitoring
-
-```bash
-# Check certificate expiry
-echo | openssl s_client -connect example.com:443 -servername example.com 2>/dev/null | openssl x509 -noout -dates
-
-# Check SSL grade
-# Use: https://www.ssllabs.com/ssltest/
-
-# Monitor with cron alert (30 days before expiry)
-EXPIRY=$(echo | openssl s_client -connect example.com:443 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)
-DAYS_LEFT=$(( ( $(date -d "$EXPIRY" +%s) - $(date +%s) ) / 86400 ))
-if [ "$DAYS_LEFT" -lt 30 ]; then echo "⚠️ SSL expires in $DAYS_LEFT days"; fi
-```
-
-### Step 6: Output
-
-```
-━━━ DOMAIN & SSL CONFIGURATION ━━━━━━━━━━
-
-── DNS RECORDS ───────────────────────────
-[table of records to create/update]
-
-── SSL/TLS ───────────────────────────────
-Method: [Let's Encrypt / Cloudflare / managed]
-Config: [server config snippet]
-
-── EMAIL DNS ─────────────────────────────
-SPF: [record]
-DKIM: [record]
-DMARC: [record]
-
-── VERIFICATION ──────────────────────────
-[dig commands to verify each record]
-
-── MONITORING ────────────────────────────
-[cert expiry check command/cron]
-```
+- **Certificate chain incomplete:** Server sends leaf cert but not intermediate. Test with SSL Labs. Fix by serving `fullchain.pem`, not just `cert.pem`.
+- **Mixed content after HTTPS migration:** Browser blocks HTTP resources on HTTPS pages. Audit all asset URLs, use protocol-relative or absolute HTTPS URLs. CSP `upgrade-insecure-requests` as interim fix.
+- **Redirect loops with Cloudflare:** Cloudflare SSL mode set to "Flexible" while origin also redirects HTTP to HTTPS. Fix: set Cloudflare SSL to "Full (Strict)" when origin has a valid cert.
 
 ## Anti-Patterns
 
-- **Using A records when CNAME works**: CNAME follows the target if the IP changes. A records break on IP change.
-- **Forgetting www redirect**: Set up both `@` and `www`, redirect one to the other.
-- **Not setting CAA records**: CAA restricts which CAs can issue certs. Without it, any CA can issue for your domain.
-- **Starting DMARC at `p=reject`**: Always start at `p=none` to monitor, then tighten.
-- **Ignoring certificate renewal**: Let's Encrypt certs last 90 days. Auto-renewal must be working.
-- **Pointing DNS to Cloudflare but not enabling proxy**: DNS-only mode doesn't give you Cloudflare's DDoS protection or SSL.
+- Using A records when CNAME works (breaks on IP change)
+- Skipping CAA records (any CA can issue for your domain)
+- Jumping to HSTS `preload` before testing (irreversible for `max-age` duration)
+- Starting DMARC at `p=reject` (start at `p=none`, monitor, then tighten)
+- Manual cert renewal instead of automated (90-day expiry catches people)
+- Pointing DNS through Cloudflare proxy in DNS-only mode (no DDoS protection or edge SSL)
 
 ## Escalation
 
-Hand off when:
-- Complex multi-CDN setup with failover
-- DNSSEC implementation needed
-- Enterprise certificate management (internal PKI)
-- Regulatory requirements for specific TLS configurations
+Hand off when: multi-CDN failover, DNSSEC implementation, enterprise internal PKI, regulatory-specific TLS cipher requirements.
 
 ## Inputs
+
 - Domain name and registrar
-- Hosting provider
-- Email sending services
-- CDN preference
+- Hosting provider and architecture (PaaS vs VPS)
+- Email sending services (if any)
+- CDN preference (Cloudflare, direct, etc.)
 
 ## Outputs
-- DNS record configuration
-- SSL/TLS setup commands and config
-- Email authentication records (SPF/DKIM/DMARC)
-- Verification commands
-- Monitoring setup
+
+- DNS record set (types and values)
+- SSL method and renewal approach
+- HSTS header configuration
+- Email authentication records (SPF/DKIM/DMARC) if applicable
+- Verification steps
 
 ## Level History
 
 - **Lv.1** — Base: DNS record configuration, Let's Encrypt/Caddy/nginx SSL setup, email DNS (SPF/DKIM/DMARC), propagation debugging, certificate monitoring. (Origin: MemStack v3.3, Mar 2026)
+- **Lv.2** — Compressed: Removed implementation snippets (nginx configs, certbot commands, dig examples). Restructured as decision trees with validation gates. Added certificate chain and mixed content pitfalls, HSTS rollout rules, multi-domain strategy, redirect loop diagnosis. (Origin: MemStack v3.4, Mar 2026)

@@ -1,412 +1,144 @@
 ---
 name: ci-cd-pipeline
-description: "Use when the user says 'CI/CD', 'GitHub Actions', 'pipeline', 'continuous integration', 'continuous deployment', 'automate deploys', 'workflow', or needs automated build, test, and deployment pipelines. Do NOT use for one-time manual deployments (see railway-deploy, netlify-deploy)."
+description: "Design CI/CD pipelines with lint/test/build/deploy stages, environment promotion, caching, and rollback. WHEN: 'CI/CD', 'GitHub Actions', 'pipeline', 'continuous integration', 'continuous deployment', 'automate deploys'. NOT WHEN: one-time manual deploys (see railway-deploy, netlify-deploy), Docker setup without pipeline context (see docker-setup)."
 ---
 
-# ⚙️ CI/CD Pipeline — Automated Build, Test & Deploy
-*Design and implement CI/CD pipelines with lint, test, build, and deploy stages, environment management, caching, and rollback strategies.*
+# CI/CD Pipeline
 
 ## Activation
 
-When this skill activates, output:
-
-`⚙️ CI/CD Pipeline — Designing your automated pipeline...`
-
 | Context | Status |
 |---------|--------|
-| **User says "CI/CD", "GitHub Actions", "pipeline"** | ACTIVE |
-| **User wants automated testing/deployment** | ACTIVE |
-| **User wants one-time manual deploy to Railway** | DORMANT — see railway-deploy |
-| **User wants Netlify-specific deploy** | DORMANT — see netlify-deploy |
-| **User wants Docker setup** | DORMANT — see docker-setup |
+| User says "CI/CD", "GitHub Actions", "pipeline", "automate deploys" | ACTIVE |
+| User wants automated testing and deployment on push/merge | ACTIVE |
+| One-time manual deploy to Railway/Netlify | DORMANT -- see railway-deploy, netlify-deploy |
+| Docker setup without pipeline orchestration | DORMANT -- see docker-setup |
 
-## Protocol
+When active, output: `CI/CD Pipeline -- Designing your automated pipeline...`
 
-### Step 1: Gather Inputs
+## Instructions
 
-- **CI platform**: GitHub Actions (default), GitLab CI, CircleCI?
-- **Tech stack**: Language, framework, package manager
-- **Test suite**: Unit, integration, e2e? Test runner?
-- **Deploy target**: Railway, Netlify, AWS, Hetzner, Docker registry?
-- **Environments**: dev/staging/prod? Or just prod?
-- **Monorepo?**: Single app or multiple packages?
+### Step 1: Gather Requirements
 
-### Step 2: Pipeline Architecture
+Collect before proceeding. Block if tech stack or deploy target is unknown.
 
-```
-Standard pipeline stages:
-┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐
-│   Lint   │──▶│   Test   │──▶│  Build   │──▶│  Deploy  │──▶│  Verify  │
-│          │   │          │   │          │   │ (staging) │   │ (smoke)  │
-└──────────┘   └──────────┘   └──────────┘   └──────────┘   └──────────┘
-                                                   │
-                                             ┌─────▼─────┐
-                                             │  Deploy   │
-                                             │  (prod)   │
-                                             │ [manual]  │
-                                             └───────────┘
-```
+- **CI platform**: GitHub Actions (default for GitHub repos), GitLab CI (for GitLab repos), CircleCI (if team already uses it). Do not suggest switching platforms without reason.
+- **Tech stack**: Language, framework, package manager, test runner.
+- **Deploy target**: Railway, Netlify, GHCR/Docker registry, SSH to VPS, AWS.
+- **Environments**: Solo/small = main->prod. Small team = main->staging(auto)->prod(manual). Larger team = feature->dev(auto)->staging(on merge)->prod(manual). Enterprise = add QA + canary gates.
+- **Monorepo**: If yes, use path filters on workflow triggers and per-package caching.
 
-**Environment strategy decision tree:**
-```
-How many environments do you need?
-├── Solo dev / small project → Just `main` → prod (direct deploy)
-├── Small team → `main` → staging (auto) → prod (manual approval)
-├── Larger team → feature branches → dev (auto) → staging (auto on merge) → prod (manual)
-└── Enterprise → feature → dev → QA → staging → canary → prod (gated)
-```
+GATE: All five inputs confirmed before Step 2.
 
-### Step 3: GitHub Actions Workflows
+### Step 2: Design Pipeline Stages
 
-**Node.js / TypeScript:**
-```yaml
-# .github/workflows/ci.yml
-name: CI
+Fixed stage order: **lint -> test -> build -> deploy -> verify**. Never reorder. Each stage gates the next -- failure stops the pipeline.
 
-on:
-  push:
-    branches: [main, develop]
-  pull_request:
-    branches: [main]
+- **Lint**: Linter + type checker for the stack. Runs first because it is fastest and catches the most trivial failures.
+- **Test**: Unit + integration. Use service containers for databases. Upload coverage as artifact.
+- **Build**: Compile/bundle. Upload build artifact for deploy stages. Skip rebuild in deploy jobs.
+- **Deploy**: Staging auto-deploys on main. Prod requires manual approval via GitHub Environments (or equivalent).
+- **Verify**: Smoke test the deployed URL. Health check with retry loop (5 attempts, 10s interval). Failure triggers alert, not auto-rollback.
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+GATE: Stage list and trigger branches confirmed before Step 3.
 
-jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run typecheck
+### Step 3: Caching Strategy
 
-  test:
-    runs-on: ubuntu-latest
-    needs: lint
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_PASSWORD: test
-          POSTGRES_DB: testdb
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-      - run: npm ci
-      - run: npm test -- --coverage
-        env:
-          DATABASE_URL: postgresql://postgres:test@localhost:5432/testdb
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: coverage
-          path: coverage/
+Cache by lockfile hash. Rules:
 
-  build:
-    runs-on: ubuntu-latest
-    needs: test
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-      - run: npm ci
-      - run: npm run build
-      - uses: actions/upload-artifact@v4
-        with:
-          name: build
-          path: dist/
+- **npm/pnpm/yarn**: Use `actions/setup-node` built-in cache. Key on `package-lock.json` / `pnpm-lock.yaml` / `yarn.lock`.
+- **pip**: Use `actions/setup-python` built-in cache. Key on `requirements*.txt`.
+- **Go**: Use `actions/setup-go` built-in cache. Key on `go.sum`.
+- **Rust**: Use `Swatinem/rust-cache`. Key on `Cargo.lock`.
+- **Docker layers**: Use `cache-from: type=gha` and `cache-to: type=gha,mode=max` with `docker/build-push-action`.
 
-  deploy-staging:
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.ref == 'refs/heads/main'
-    environment: staging
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: build
-          path: dist/
-      # Deploy to your target (Railway, Netlify, etc.)
-      - run: echo "Deploy to staging"
+If cache miss rate exceeds ~30%, the key is wrong. Verify lockfile path and hash scope.
 
-  deploy-prod:
-    runs-on: ubuntu-latest
-    needs: deploy-staging
-    if: github.ref == 'refs/heads/main'
-    environment:
-      name: production
-      url: https://yourapp.com
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: build
-          path: dist/
-      - run: echo "Deploy to production"
-```
+GATE: Cache config validated (correct lockfile path exists) before Step 4.
 
-**Python / FastAPI:**
-```yaml
-name: CI
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+### Step 4: Secret Management
 
-jobs:
-  lint-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          cache: 'pip'
-      - run: pip install -r requirements.txt -r requirements-dev.txt
-      - run: ruff check .
-      - run: mypy .
-      - run: pytest --cov=app --cov-report=xml
-      - uses: actions/upload-artifact@v4
-        with:
-          name: coverage
-          path: coverage.xml
+- Store all secrets in CI platform's secret store (Settings -> Secrets for GitHub, CI/CD Variables for GitLab). Never in workflow files.
+- Use environment-scoped secrets for staging vs prod credentials.
+- Prefer `GITHUB_TOKEN` (auto-generated, scoped) over PATs wherever possible.
+- Pin third-party actions to commit SHA, not version tag. Supply chain attacks use tag hijacking.
+- Rotate secrets on a schedule. Do not wait for compromise.
 
-  build-push:
-    needs: lint-test
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v5
-        with:
-          push: true
-          tags: ghcr.io/${{ github.repository }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-```
+GATE: Secret list documented and confirmed with user before Step 5.
 
-**Go:**
-```yaml
-name: CI
-on: [push, pull_request]
+### Step 5: Deployment Strategy
 
-jobs:
-  ci:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-      - run: go vet ./...
-      - run: staticcheck ./...
-      - run: go test -race -coverprofile=coverage.out ./...
-      - run: go build -o bin/app ./cmd/server
-```
+Decision tree:
 
-### Step 4: Caching Strategies
+- **Solo/small project, low traffic**: Rolling deploy (default). Push new version, old dies. Acceptable downtime.
+- **User-facing app, needs zero downtime**: Blue-green. Deploy to inactive slot, swap traffic. Requires two target environments or platform support (Railway, AWS).
+- **High-traffic, risk-averse**: Canary. Route 5-10% traffic to new version, monitor error rates, promote or rollback. Requires load balancer with traffic splitting.
 
-| Ecosystem | Cache Key | Cache Path |
-|-----------|-----------|------------|
-| npm | `hashFiles('**/package-lock.json')` | `~/.npm` (setup-node handles) |
-| pip | `hashFiles('**/requirements*.txt')` | `~/.cache/pip` |
-| Go | `hashFiles('**/go.sum')` | `~/go/pkg/mod` |
-| Rust | `hashFiles('**/Cargo.lock')` | `~/.cargo/registry`, `target/` |
-| Docker | `type=gha` | GitHub Actions cache backend |
+If the user does not express a preference, default to rolling for simplicity.
 
-**Docker layer caching (critical for speed):**
-```yaml
-- uses: docker/build-push-action@v5
-  with:
-    cache-from: type=gha
-    cache-to: type=gha,mode=max
-```
+### Step 6: Environment Promotion and Branch Protection
 
-### Step 5: Secret Management
+- **Branch protection on main**: Require PR, require CI pass, require 1+ review (team projects). No direct push.
+- **Promotion flow**: Feature branch -> PR -> main (triggers staging deploy) -> manual approval -> prod deploy.
+- **Concurrency control**: Use `concurrency` groups keyed on workflow + ref. Cancel in-progress runs on new pushes to same branch.
+- **Notification integration**: Post deploy status to Slack/Discord/Teams via webhook step at end of deploy job. Include: environment, version/SHA, deploy URL, status.
 
-```yaml
-# Define secrets in: Settings → Secrets and variables → Actions
-# Reference in workflow:
-env:
-  DATABASE_URL: ${{ secrets.DATABASE_URL }}
-  API_KEY: ${{ secrets.API_KEY }}
+### Step 7: Rollback
 
-# Environment-specific secrets:
-# Settings → Environments → staging/production → Add secret
-# Referenced the same way but only available in jobs with that environment
-```
-
-**Rules:**
-- Never echo secrets in logs: `echo ${{ secrets.X }}` is masked but avoid it
-- Pin third-party actions to SHA, not tag: `uses: actions/checkout@abc123` not `@v4`
-- Use `GITHUB_TOKEN` (auto-generated) where possible instead of PATs
-- Rotate secrets on schedule, not just when compromised
-
-### Step 6: Deployment Targets
-
-**Railway:**
-```yaml
-deploy:
-  steps:
-    - uses: railwayapp/railway-github-link@v1
-      with:
-        railway_token: ${{ secrets.RAILWAY_TOKEN }}
-```
-
-**Netlify:**
-```yaml
-deploy:
-  steps:
-    - run: npx netlify-cli deploy --prod --dir=dist
-      env:
-        NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-        NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
-```
-
-**Docker Registry (GHCR):**
-```yaml
-deploy:
-  steps:
-    - uses: docker/login-action@v3
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    - uses: docker/build-push-action@v5
-      with:
-        push: true
-        tags: ghcr.io/${{ github.repository }}:latest
-```
-
-**SSH to VPS (Hetzner, DigitalOcean):**
-```yaml
-deploy:
-  steps:
-    - uses: appleboy/ssh-action@v1
-      with:
-        host: ${{ secrets.SERVER_HOST }}
-        username: deploy
-        key: ${{ secrets.SSH_PRIVATE_KEY }}
-        script: |
-          cd /opt/app
-          git pull origin main
-          docker compose up -d --build
-```
-
-### Step 7: Rollback Strategy
-
-```yaml
-# Tag every successful deploy
-- run: |
-    git tag "deploy-$(date +%Y%m%d-%H%M%S)"
-    git push origin --tags
-
-# Rollback = redeploy previous tag
-# Manual trigger with version input:
-on:
-  workflow_dispatch:
-    inputs:
-      rollback_tag:
-        description: 'Tag to rollback to'
-        required: true
-```
-
-**Smoke test after deploy:**
-```yaml
-verify:
-  needs: deploy
-  steps:
-    - run: |
-        for i in 1 2 3 4 5; do
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://yourapp.com/health)
-          if [ "$STATUS" = "200" ]; then echo "✅ Health check passed"; exit 0; fi
-          echo "Attempt $i: got $STATUS, retrying..."
-          sleep 10
-        done
-        echo "❌ Health check failed after 5 attempts"
-        exit 1
-```
+- Tag every successful production deploy: `deploy-YYYYMMDD-HHMMSS`.
+- Rollback = re-run the deploy job for the previous tag. Use `workflow_dispatch` with a `rollback_tag` input.
+- Do NOT auto-rollback on smoke test failure. Alert the team and let humans decide. Auto-rollback causes cascading failures when the health endpoint itself is the problem.
 
 ### Step 8: Output
 
-```
-━━━ CI/CD PIPELINE ━━━━━━━━━━━━━━━━━━━━━━
+Deliver: workflow YAML file(s), secret configuration checklist, rollback procedure, smoke test config. Write files directly to `.github/workflows/` (or equivalent). Do not dump YAML into chat and ask the user to copy it.
 
-── ARCHITECTURE ──────────────────────────
-Stages: lint → test → build → deploy-staging → deploy-prod
-Platform: GitHub Actions
-Environments: staging (auto), production (manual approval)
+## Examples
 
-── WORKFLOW FILES ─────────────────────────
-.github/workflows/ci.yml
-[complete YAML]
+**1. Node.js SaaS, GitHub Actions, Railway deploy**
+Lint (eslint + tsc) -> Test (vitest, Postgres service container) -> Build (vite) -> Deploy staging (Railway, auto on main) -> Deploy prod (Railway, manual approval). Cache: setup-node with npm. Secrets: RAILWAY_TOKEN (env-scoped). Rollback: Railway dashboard revert or redeploy previous tag.
 
-── SECRETS REQUIRED ──────────────────────
-[list of secrets to configure]
+**2. Python API, GitLab CI, Docker + SSH to VPS**
+Lint (ruff + mypy) -> Test (pytest, coverage) -> Build (docker build, push to registry) -> Deploy staging (SSH, docker compose pull + up) -> Deploy prod (manual trigger). Cache: pip cache dir keyed on requirements.txt. Secrets: GitLab CI/CD Variables (SSH_KEY, REGISTRY_TOKEN, protected + masked). Rollback: pin docker-compose to previous image SHA.
 
-── CACHING ───────────────────────────────
-[cache strategy and expected speedup]
+## Common Issues
 
-── ROLLBACK ──────────────────────────────
-[rollback procedure]
-```
+- **Slow pipelines**: 90% of the time it is missing cache or redundant `npm ci` across jobs. Use artifacts to pass build output between jobs instead of rebuilding.
+- **Flaky tests blocking deploy**: Do not add `continue-on-error`. Fix the test or quarantine it in a separate non-blocking job. Flaky tests that gate deploys erode trust in the pipeline.
+- **Secrets not available in PR from fork**: GitHub does not expose secrets to fork PRs (security). Use `pull_request_target` with extreme caution or skip deploy steps on fork PRs.
 
 ## Anti-Patterns
 
-- **Deploying on every push to main without tests**: Always gate deploys behind passing tests.
-- **Using `@latest` or `@main` for third-party actions**: Pin to SHA for supply chain security.
-- **Storing secrets in workflow files**: Use GitHub Secrets, never hardcode.
-- **No concurrency control**: Multiple deploys racing causes issues. Use `concurrency` groups.
-- **Skipping staging**: Even for small apps, deploy to staging first and smoke test.
-- **Massive monolithic workflows**: Split into reusable workflows for maintainability.
+- Deploying on push to main without test gate.
+- Using `@latest` or `@v4` for third-party actions instead of pinning to SHA.
+- Hardcoding secrets in workflow files or echoing them in logs.
+- No concurrency control -- parallel deploys to the same environment race.
+- Skipping staging -- even solo projects benefit from a staging smoke test.
+- Monolithic single-job workflows -- split into jobs so failures are isolated and cacheable stages can parallelize.
 
 ## Escalation
 
 Hand off when:
-- Complex multi-region deployment with blue/green or canary strategies
-- Compliance requires audit trails on all pipeline executions
-- Self-hosted runners need network/security configuration
-- Pipeline needs to orchestrate across multiple repositories
+- Multi-region deployment with traffic-weighted canary requires service mesh configuration.
+- Compliance mandates audit trails or signed attestations on every pipeline execution.
+- Self-hosted runners need network/security hardening beyond standard setup.
+- Pipeline must orchestrate across multiple repositories with cross-repo triggers.
 
 ## Inputs
-- Tech stack and test framework
+
+- Tech stack (language, framework, package manager, test runner)
 - CI platform preference
-- Deploy target(s)
-- Environment strategy
+- Deploy target(s) and environment count
 - Monorepo structure (if applicable)
 
 ## Outputs
-- Complete workflow YAML files
-- Secret configuration list
-- Caching strategy
+
+- Workflow YAML files written to repo
+- Secret configuration checklist
 - Rollback procedure
 - Smoke test configuration
 
 ## Level History
 
-- **Lv.1** — Base: Multi-stack workflow templates (Node, Python, Go, Rust), environment strategy decision tree, caching by ecosystem, secret management, deployment to 4 targets (Railway, Netlify, GHCR, SSH), rollback strategy, smoke tests. (Origin: MemStack v3.3, Mar 2026)
+- **Lv.1** -- Base: Multi-stack templates, environment strategy, caching, secrets, 4 deploy targets, rollback, smoke tests. (Origin: MemStack v3.3, Mar 2026)
+- **Lv.2** -- Compressed: Decision-rule format, removed full YAML examples, added validation gates, deployment strategy decision tree, branch protection rules, notification integration, common issues. (Origin: MemStack v3.4, Mar 2026)

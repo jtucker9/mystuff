@@ -1,240 +1,155 @@
 ---
 name: netlify-deploy
-description: "Use when the user says 'deploy to Netlify', 'Netlify', 'static site deploy', 'netlify.toml', or needs to deploy a static site, SPA, or serverless functions to Netlify. Do NOT use for backend API deployments (see railway-deploy) or VPS (see hetzner-setup)."
+description: "Deploy static sites, SPAs, and serverless/edge functions to Netlify. WHEN: 'deploy to Netlify', 'Netlify', 'static site deploy', 'netlify.toml', serverless functions on Netlify. NOT WHEN: backend API deployments (railway-deploy), VPS (hetzner-setup), persistent server processes."
 ---
 
-# 🌍 Netlify Deploy — Static Site & Serverless Deployment
-*Deploy static sites, SPAs, and serverless functions to Netlify with build configuration, redirects, custom domains, and edge functions.*
+# Netlify Deploy
 
 ## Activation
 
-When this skill activates, output:
-
-`🌍 Netlify Deploy — Configuring Netlify deployment...`
-
 | Context | Status |
 |---------|--------|
-| **User says "deploy to Netlify", "Netlify", "static site deploy"** | ACTIVE |
-| **User wants serverless functions on Netlify** | ACTIVE |
-| **User wants backend API deployment** | DORMANT — see railway-deploy |
-| **User wants VPS deployment** | DORMANT — see hetzner-setup |
+| "deploy to Netlify", "Netlify", "static site deploy" | ACTIVE |
+| Serverless or edge functions on Netlify | ACTIVE |
+| Backend API deployment | DORMANT — railway-deploy |
+| VPS or persistent processes | DORMANT — hetzner-setup |
 
-## Protocol
+Output on activation: `Netlify Deploy — Configuring deployment...`
 
-### Step 1: Gather Inputs
+## Instructions
 
-- **Framework**: React, Next.js, Astro, Hugo, Gatsby, plain HTML?
-- **Build command**: What builds the site?
-- **Output directory**: Where does the build output go?
-- **Serverless functions**: Any API routes or functions needed?
-- **Custom domain**: Domain name ready?
-- **Environment variables**: What secrets/config needed?
+### Step 1: Detect Framework and Build Settings
 
-### Step 2: Create netlify.toml
+Identify framework from project files. Apply defaults:
 
-**React / Vite:**
-```toml
-[build]
-  command = "npm run build"
-  publish = "dist"
+| Framework | Build Command | Publish Dir | Requires Plugin |
+|-----------|--------------|-------------|-----------------|
+| Next.js | `npm run build` | `.next` | `@netlify/plugin-nextjs` |
+| React/Vite | `npm run build` | `dist` | No |
+| Vue/Nuxt | `npm run build` | `.output/public` or `dist` | `@netlify/plugin-nuxt` for Nuxt 3 |
+| Hugo | `hugo --minify` | `public` | No — pin `HUGO_VERSION` in env |
+| Gatsby | `gatsby build` | `public` | `@netlify/plugin-gatsby` |
+| Astro | `npm run build` | `dist` | No |
+| Plain HTML | None | `.` or `public` | No |
 
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
+**Gate:** Confirm build command runs locally before proceeding.
 
-[build.environment]
-  NODE_VERSION = "20"
-```
+### Step 2: Configure Deploy Contexts
 
-**Next.js:**
-```toml
-[build]
-  command = "npm run build"
-  publish = ".next"
+Apply settings per context hierarchy (most specific wins):
 
-[[plugins]]
-  package = "@netlify/plugin-nextjs"
+| Context | Purpose | Decision |
+|---------|---------|----------|
+| `production` | Live site from production branch | Secrets, production API URLs, analytics |
+| `deploy-preview` | PR preview builds | Staging API URLs, test credentials |
+| `branch-deploy` | Named branch builds | Branch-specific overrides only if needed |
 
-[build.environment]
-  NODE_VERSION = "20"
-```
+Non-secret env vars go in `netlify.toml` per context. Secrets go through CLI or dashboard only.
 
-**Astro:**
-```toml
-[build]
-  command = "npm run build"
-  publish = "dist"
+**Gate:** Environment variables categorized as secret vs. non-secret before writing config.
 
-[build.environment]
-  NODE_VERSION = "20"
-```
+### Step 3: Define Redirect and Header Rules
 
-**Hugo:**
-```toml
-[build]
-  command = "hugo --minify"
-  publish = "public"
+Decision tree:
+- SPA with client-side routing? Add catch-all rewrite (`/* -> /index.html`, 200).
+- API proxy to external backend? Add path-scoped rewrite with `force = true`.
+- Domain canonicalization needed (www vs apex)? Add 301 redirect with `force = true`.
+- Custom headers needed (CORS, caching, CSP)? Define in headers config.
 
-[build.environment]
-  HUGO_VERSION = "0.124.1"
+Rule priority: first match wins. Order specific paths before catch-alls. Forced rules override existing content.
 
-[context.production.environment]
-  HUGO_ENV = "production"
-```
+**Gate:** SPA rewrite present if framework uses client-side routing.
 
-### Step 3: Redirects & Rewrites
+### Step 4: Decide on Functions
 
-```toml
-# SPA fallback (client-side routing)
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
+**Serverless vs. Edge functions:**
 
-# API proxy to backend
-[[redirects]]
-  from = "/api/*"
-  to = "https://api.myapp.railway.app/:splat"
-  status = 200
-  force = true
+| Factor | Serverless | Edge |
+|--------|-----------|------|
+| Cold start tolerance | Acceptable | Need sub-50ms |
+| Node.js API compatibility | Full | Deno-based, limited |
+| Geolocation/personalization | Not needed | Needed at edge |
+| Execution time limit | 10s (free) / 26s (pro) | 50ms target |
 
-# Domain redirect (www to apex)
-[[redirects]]
-  from = "https://www.example.com/*"
-  to = "https://example.com/:splat"
-  status = 301
-  force = true
+Place serverless functions in `netlify/functions/`. Edge functions in `netlify/edge-functions/`. Use custom path config to expose at clean URLs (e.g., `/api/*`).
 
-# Custom 404
-[[redirects]]
-  from = "/*"
-  to = "/404.html"
-  status = 404
-```
+**Gate:** If functions access secrets, verify those env vars are set in the target deploy context.
 
-### Step 4: Serverless Functions
+### Step 5: Evaluate Build Plugins
 
-```
-# Directory structure:
-netlify/
-  functions/
-    hello.js        # Available at /.netlify/functions/hello
-    submit-form.js
-```
+Categories to consider:
+- **Framework adapters** — Required for SSR frameworks (Next.js, Nuxt, Gatsby). Auto-installed if framework detected.
+- **Optimization** — Image compression, CSS purging, sitemap generation. Add only if measurable benefit.
+- **Caching** — Build cache plugins for large dependency trees. Worth it if builds exceed 3 minutes.
+- **Monitoring** — Lighthouse, bundle analysis. Add for production-critical sites.
 
-```javascript
-// netlify/functions/hello.js
-export default async (req, context) => {
-  const name = new URL(req.url).searchParams.get('name') || 'World';
-  return new Response(JSON.stringify({ message: `Hello, ${name}!` }), {
-    headers: { 'Content-Type': 'application/json' },
-  });
-};
+Only add plugins that solve a stated problem. Do not install speculatively.
 
-export const config = {
-  path: "/api/hello"  // Custom path (instead of /.netlify/functions/hello)
-};
-```
+**Gate:** Each plugin has a clear justification documented.
 
-### Step 5: Environment Variables
+### Step 6: Set Deploy Preview Strategy
 
-```bash
-# Via CLI
-npx netlify-cli env:set API_KEY "your-secret-value"
-npx netlify-cli env:set DATABASE_URL "postgresql://..." --context production
+Decisions:
+- Branch deploys enabled for which branches? Default: production branch only + PR previews.
+- Deploy notifications configured (Slack, email, webhook)?
+- Auto-publish on? If off, production deploys require manual promotion.
+- Form handling needed? Enable Netlify Forms only if the site has `<form>` elements that should be captured without a backend. Attribute-based detection (`data-netlify="true"`).
 
-# Or in netlify.toml (non-secret values only)
-[context.production.environment]
-  API_URL = "https://api.myapp.com"
+**Gate:** Preview URL accessible and functional before promoting to production.
 
-[context.deploy-preview.environment]
-  API_URL = "https://staging-api.myapp.com"
-```
+### Step 7: Deploy and Verify
 
-### Step 6: Deploy
+Deploy preview first. Verify: routes resolve, functions respond, env vars populated, redirects work. Then deploy to production.
 
-```bash
-# Install CLI
-npm install -g netlify-cli
+**Gate:** Preview deploy returns 200 on all critical paths before production deploy.
 
-# Login
-netlify login
+## Examples
 
-# Link to existing site (or create new)
-netlify init
+**1. React SPA with API proxy to Railway backend:**
+Framework: React/Vite. Publish: `dist`. SPA rewrite for client routing. Proxy `/api/*` to Railway URL with force. Production env vars via CLI. No functions needed.
 
-# Deploy preview (test before production)
-netlify deploy --dir=dist
+**2. Next.js with serverless API routes and edge personalization:**
+Framework: Next.js. Plugin: `@netlify/plugin-nextjs`. API routes auto-deploy as serverless functions. Add edge function for geo-based content. Separate env vars per deploy context. PR previews with staging API URL.
 
-# Deploy to production
-netlify deploy --prod --dir=dist
+## Common Issues
 
-# Or just push to git — Netlify auto-deploys from connected repo
-git push origin main
-```
-
-### Step 7: Custom Domain
-
-1. In Netlify Dashboard: Domain settings → Add custom domain
-2. Set DNS records:
-   - `A` record: `@` → `75.2.60.5`
-   - `CNAME` record: `www` → `yoursite.netlify.app`
-3. Enable HTTPS (automatic with Netlify-managed DNS)
-4. Force HTTPS redirect in netlify.toml or dashboard
-
-### Step 8: Output
-
-```
-━━━ NETLIFY DEPLOYMENT ━━━━━━━━━━━━━━━━━━
-
-── CONFIGURATION ─────────────────────────
-netlify.toml: [generated]
-Build: [command]
-Publish: [directory]
-
-── FEATURES ──────────────────────────────
-Redirects: [configured]
-Functions: [N functions at /api/*]
-Environment: [N variables set]
-
-── DOMAINS ───────────────────────────────
-Preview: [site-name.netlify.app]
-Production: [custom domain if set]
-
-── DEPLOY COMMANDS ───────────────────────
-Preview: netlify deploy --dir=dist
-Production: netlify deploy --prod --dir=dist
-```
+- **404 on page refresh (SPA):** Missing catch-all rewrite. Client-side routing needs `/* -> /index.html` with status 200.
+- **Function timeout:** Free tier limits serverless to 10s. Move heavy computation to background functions or external service.
+- **Build fails on deploy but works locally:** Node version mismatch. Pin `NODE_VERSION` in build environment. Check that all dependencies are in `package.json` (not globally installed).
 
 ## Anti-Patterns
 
-- **Missing SPA redirect**: Without the `/* → /index.html` redirect, refreshing any page returns 404.
-- **Secrets in netlify.toml**: Only put non-sensitive values here. Use dashboard or CLI for secrets.
-- **Large build artifacts**: Netlify has a 25GB bandwidth limit on free tier. Optimize images and assets.
-- **Ignoring deploy previews**: Always check the preview URL before merging to main.
+- Committing secrets in `netlify.toml` — use CLI/dashboard for sensitive values.
+- Installing framework adapter plugins manually when Netlify auto-detects them.
+- Using edge functions for workloads that need full Node.js APIs.
+- Enabling branch deploys for all branches — creates unnecessary builds and uses build minutes.
+- Skipping deploy previews and pushing directly to production.
 
 ## Escalation
 
 Hand off when:
-- Complex server-side rendering with streaming (may need different platform)
-- High-traffic site exceeding Netlify bandwidth limits
-- Need for persistent server processes (websockets, long-running tasks)
+- Streaming SSR or WebSocket connections required (not supported on Netlify).
+- Bandwidth exceeds plan limits consistently — evaluate dedicated hosting.
+- Need persistent background workers or long-running processes — use Railway or Hetzner.
 
 ## Inputs
+
 - Framework and build configuration
-- Redirect requirements
-- Serverless function needs
-- Custom domain
-- Environment variables
+- Redirect and header requirements
+- Serverless/edge function needs
+- Environment variables (secret vs. non-secret)
+- Custom domain (if ready)
+- Deploy preview strategy preferences
 
 ## Outputs
-- netlify.toml configuration
-- Redirect rules
-- Serverless function scaffolding
-- Deploy commands
-- Custom domain DNS records
+
+- `netlify.toml` configuration
+- Function scaffolding (if needed)
+- Deploy context environment plan
+- Redirect/header rules
+- Deployment verification checklist
 
 ## Level History
 
-- **Lv.1** — Base: Framework-specific netlify.toml templates (React, Next.js, Astro, Hugo), redirect/rewrite rules, serverless functions, environment variable management, CLI deployment, custom domain setup. (Origin: MemStack v3.3, Mar 2026)
+- **Lv.1** — Base: Framework-specific templates, redirect rules, serverless functions, env var management, CLI deployment, custom domain setup. (Origin: MemStack v3.3, Mar 2026)
+- **Lv.2** — Compressed: Decision-rule format. Added edge vs serverless decision matrix, deploy context hierarchy, build plugin categories, deploy preview strategy, form handling approach, validation gates. Removed all code examples and CLI sequences. (Origin: MemStack v3.4, Mar 2026)

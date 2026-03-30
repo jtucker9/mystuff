@@ -1,389 +1,156 @@
 ---
 name: dependency-audit
-description: "Use when the user says 'dependency audit', 'npm audit', 'pip audit', 'cargo audit', 'vulnerable packages', 'supply chain', 'outdated packages', 'SBOM', or needs to scan dependencies for vulnerabilities and upgrade risks. Do NOT use for application-level security (see owasp-top10) or secrets scanning (see secrets-scanner)."
+description: "Scan dependencies for CVEs, supply chain threats, and license risks. WHEN: 'dependency audit', 'npm audit', 'pip audit', 'cargo audit', 'vulnerable packages', 'supply chain', 'SBOM', 'outdated packages'. NOT WHEN: app-level vulns (owasp-top10), secrets (secrets-scanner), HTTP headers (csp-headers)."
 ---
 
-# 📦 Dependency Audit — Vulnerability Scanning & Supply Chain Security
-*Scan project dependencies for known vulnerabilities, abandoned packages, license risks, and supply chain threats with a prioritized remediation plan.*
+# Dependency Audit
+
+Scan project dependencies for known vulnerabilities, abandoned packages, license risks, and supply chain threats. Produce a prioritized remediation plan.
 
 ## Activation
 
-When this skill activates, output:
-
-`📦 Dependency Audit — Scanning dependencies for vulnerabilities and supply chain risks...`
-
 | Context | Status |
 |---------|--------|
-| **User says "dependency audit", "npm audit", "vulnerable packages"** | ACTIVE |
-| **User mentions "supply chain", "outdated", "CVE"** | ACTIVE |
-| **User wants SBOM generation or license compliance** | ACTIVE |
-| **User wants application-level security review** | DORMANT — see owasp-top10 |
-| **User wants secrets/credential scanning** | DORMANT — see secrets-scanner |
-| **User wants HTTP security headers** | DORMANT — see csp-headers |
+| "dependency audit", "npm audit", "vulnerable packages", "CVE" | ACTIVE |
+| "supply chain", "outdated", "SBOM", "license compliance" | ACTIVE |
+| Application-level security review | DORMANT -- see owasp-top10 |
+| Secrets/credential scanning | DORMANT -- see secrets-scanner |
+| HTTP security headers | DORMANT -- see csp-headers |
 
-## Protocol
+## Instructions
 
-### Step 1: Identify Package Ecosystem
+### Step 1: Detect ecosystem
 
-Detect the project's dependency management:
+Identify lock files in the project root. Supported: `package-lock.json` / `yarn.lock` / `pnpm-lock.yaml` (Node), `requirements.txt` / `Pipfile.lock` / `poetry.lock` (Python), `Cargo.lock` (Rust), `go.sum` (Go), `Gemfile.lock` (Ruby), `composer.lock` (PHP). Use the ecosystem's native audit tool; fall back to Trivy for multi-ecosystem or unsupported lock files.
 
-| File Found | Ecosystem | Audit Tool |
-|------------|-----------|------------|
-| `package.json` / `package-lock.json` | npm/Node.js | `npm audit`, `npx audit-ci` |
-| `yarn.lock` | Yarn | `yarn audit` |
-| `pnpm-lock.yaml` | pnpm | `pnpm audit` |
-| `requirements.txt` / `Pipfile.lock` | Python/pip | `pip-audit`, `safety check` |
-| `poetry.lock` | Python/Poetry | `pip-audit` (on exported requirements) |
-| `Cargo.lock` | Rust | `cargo audit` |
-| `go.sum` | Go | `govulncheck ./...` |
-| `Gemfile.lock` | Ruby | `bundle audit check --update` |
-| `composer.lock` | PHP | `composer audit` |
-| `pubspec.lock` | Dart/Flutter | `dart pub outdated` |
+**Gate:** At least one lock file found. If none, ask user to specify the project path or confirm the ecosystem.
 
-```bash
-# Auto-detect ecosystem
-ls package*.json yarn.lock pnpm-lock.yaml requirements*.txt Pipfile* poetry.lock Cargo.lock go.sum Gemfile.lock composer.lock 2>/dev/null
-```
+### Step 2: Run vulnerability scan
 
-### Step 2: Run Vulnerability Scan
+Run the ecosystem audit tool in JSON mode. Scan production dependencies by default; include dev dependencies only if the user requests a full audit.
 
-**Node.js / npm:**
-```bash
-# Standard audit (shows all vulnerabilities)
-npm audit
+**Gate:** Audit tool exits without errors (non-zero exit from findings is expected; non-zero from tool failure is not). If the tool is missing, install it or fall back to Trivy.
 
-# JSON output for parsing
-npm audit --json
+### Step 3: Triage findings by real-world risk
 
-# Production-only (skip devDependencies)
-npm audit --omit=dev
+CVSS severity thresholds and response times:
 
-# Fix automatically where possible
-npm audit fix
+| CVSS | Severity | Response |
+|------|----------|----------|
+| 9.0-10.0 | Critical | Fix immediately |
+| 7.0-8.9 | High | Fix within 48 hours |
+| 4.0-6.9 | Medium | Fix within 1-2 weeks |
+| 0.1-3.9 | Low | Next maintenance cycle |
 
-# See what fix would do without applying
-npm audit fix --dry-run
-```
-
-**Python / pip:**
-```bash
-# Install pip-audit
-pip install pip-audit
-
-# Scan requirements.txt
-pip-audit -r requirements.txt
-
-# Scan current environment
-pip-audit
-
-# JSON output
-pip-audit --format=json -r requirements.txt
-
-# With fix suggestions
-pip-audit --fix --dry-run -r requirements.txt
-```
-
-**Rust / Cargo:**
-```bash
-# Install cargo-audit
-cargo install cargo-audit
-
-# Run audit
-cargo audit
-
-# JSON output
-cargo audit --json
-
-# Auto-fix where possible
-cargo audit fix
-```
-
-**Go:**
-```bash
-# Built-in vulnerability checker
-govulncheck ./...
-
-# Verbose output
-govulncheck -show verbose ./...
-```
-
-**Ruby:**
-```bash
-# Install bundler-audit
-gem install bundler-audit
-
-# Run audit
-bundle audit check --update
-
-# Scan for insecure sources
-bundle audit check
-```
-
-**Multi-ecosystem scanner (Trivy):**
-```bash
-# Trivy scans any ecosystem from filesystem
-trivy fs --scanners vuln .
-
-# JSON output
-trivy fs --scanners vuln --format json -o results.json .
-
-# Filter by severity
-trivy fs --scanners vuln --severity HIGH,CRITICAL .
-```
-
-### Step 3: Interpret CVSS Scores
-
-**CVSS v3.1 Severity Scale:**
-
-| Score | Severity | Action Required |
-|-------|----------|----------------|
-| 9.0 - 10.0 | 🔴 Critical | Fix immediately — active exploits likely exist |
-| 7.0 - 8.9 | 🟠 High | Fix within 48 hours — high exploitation potential |
-| 4.0 - 6.9 | 🟡 Medium | Fix within 1-2 weeks — exploitable under specific conditions |
-| 0.1 - 3.9 | 🟢 Low | Fix in next maintenance cycle — minimal risk |
-
-**Beyond CVSS — Real-World Risk Assessment:**
-
-CVSS alone doesn't tell the full story. Evaluate each vulnerability with:
+CVSS alone is insufficient. Apply the reachability decision tree to each finding:
 
 ```
-Is this vulnerability reachable in YOUR code?
-├── Yes, in production code paths → Treat as stated CVSS severity
-├── Yes, but only in dev/test tooling → Downgrade one level
-├── No, the vulnerable function is never called → Downgrade two levels
-└── Unknown / can't determine → Treat as stated severity
+Exploitable (known exploit or EPSS > 0.5)?
++--> Yes --> Treat as Critical regardless of CVSS
++--> No
+     Reachable in production code paths?
+     +--> Yes --> Use stated CVSS severity
+     +--> Dev/test only --> Downgrade one level
+     +--> Unreachable (function never called) --> Downgrade two levels
+     +--> Unknown --> Use stated severity
 ```
 
-**EPSS (Exploit Prediction Scoring System):**
-- Check if a CVE has known exploits: search the CVE ID at nvd.nist.gov
-- EPSS > 0.5 = high probability of active exploitation → treat as Critical regardless of CVSS
+**Gate:** Every Critical and High finding has a reachability determination before proceeding to remediation.
 
-### Step 4: Analyze Transitive Dependencies
+### Step 4: Trace transitive dependencies
 
-Direct dependencies are only the surface. Most vulnerabilities hide in transitive (indirect) dependencies.
+For each finding in a transitive (indirect) dependency, identify the direct parent that pulls it in. This determines remediation path.
 
-```bash
-# npm — see full dependency tree
-npm ls --all
+**Gate:** Each transitive finding is traced to its direct parent dependency.
 
-# Find which direct dep pulls in a vulnerable transitive dep
-npm ls <vulnerable-package>
+### Step 5: Assess supply chain health
 
-# Python — show dependency tree
-pip install pipdeptree
-pipdeptree --reverse --packages <vulnerable-package>
+Evaluate non-CVE supply chain risk for direct dependencies:
 
-# Rust
-cargo tree -i <vulnerable-package>
+**Red flags:** No commits in 12+ months, single maintainer on critical package, unexpected install scripts, sudden download spikes (typosquatting), unexpectedly large package size (bundled binaries).
 
-# Go
-go mod graph | grep <vulnerable-package>
-```
+**Attack patterns to check:** Typosquatting, dependency confusion (internal name on public registry), maintainer account takeover, protestware.
 
-**Decision tree for transitive vulnerabilities:**
-```
-Vulnerable package is transitive (indirect)?
-├── Can the direct parent be updated to pull a fixed version?
-│   └── Yes → Update the direct parent dependency
-├── Can you override/force the transitive version?
-│   ├── npm: Add "overrides" in package.json
-│   ├── yarn: Add "resolutions" in package.json
-│   ├── pip: Pin the transitive dep directly in requirements.txt
-│   └── cargo: Add [patch] section in Cargo.toml
-├── Can you replace the direct parent entirely?
-│   └── Yes, if an alternative exists without the vulnerability
-└── None of the above?
-    └── Document the risk, monitor for fix, add to risk register
-```
+### Step 6: Check license compliance
 
-**npm overrides example:**
-```json
-{
-  "overrides": {
-    "vulnerable-pkg": ">=2.0.1"
-  }
-}
-```
+License risk levels:
 
-**yarn resolutions example:**
-```json
-{
-  "resolutions": {
-    "vulnerable-pkg": ">=2.0.1"
-  }
-}
-```
+| Risk | Licenses | Action |
+|------|----------|--------|
+| Safe | MIT, BSD, ISC, Apache-2.0 | None |
+| Moderate | MPL-2.0, LGPL | Review linkage model |
+| High | GPL-2.0/3.0 | Copyleft infects distributed project |
+| Critical | AGPL-3.0 | Copyleft triggers on network/SaaS use |
+| Unknown | Unlicensed / no license | No permission granted -- replace |
 
-### Step 5: Supply Chain Risk Assessment
+**Gate:** No Critical/High license risk without explicit user acknowledgment.
 
-Beyond known CVEs, assess supply chain health:
+### Step 7: Build remediation plan
 
-| Risk Factor | How to Check | Red Flag |
-|-------------|-------------|----------|
-| **Maintainer activity** | GitHub commits, releases | No commits in 12+ months |
-| **Download trends** | npm trends, PyPI stats | Sudden spike (typosquatting?) or steady decline |
-| **Maintainer count** | GitHub contributors | Single maintainer on critical package |
-| **Install scripts** | `npm show <pkg> scripts` | `preinstall` or `postinstall` scripts doing unexpected things |
-| **Package size** | `npm pack --dry-run` | Unexpectedly large (bundled binaries?) |
-| **Typosquatting** | Manual name review | `lodash` vs `1odash`, `colors` vs `colour` |
-| **Dependency count** | `npm ls --all \| wc -l` | 1000+ transitive deps = large attack surface |
+Remediation priority order (try each in sequence):
 
-**Supply chain attack patterns to watch for:**
-1. **Typosquatting**: Packages with names similar to popular ones
-2. **Dependency confusion**: Internal package name claimed on public registry
-3. **Maintainer account takeover**: Legitimate package hijacked
-4. **Star-jacking**: Fake GitHub stars to appear popular
-5. **Protestware**: Maintainer intentionally adds malicious code (e.g., `colors` v1.4.1, `node-ipc`)
+1. **Patch/update** -- minor/patch bump available, low breakage risk
+2. **Update with migration** -- major bump, breaking changes manageable
+3. **Replace** -- swap for maintained alternative without the vulnerability
+4. **Mitigate** -- add compensating controls (WAF, input validation) when no fix exists
+5. **Accept** -- document risk, set review date, add to risk register (unreachable + no fix)
 
-```bash
-# Check for install scripts (npm)
-npm show <package> scripts
+For transitive vulnerabilities: update the direct parent first; override/resolution as second option; replace the parent as last resort.
 
-# Check package size
-npm pack <package> --dry-run
+### Step 8: Produce report
 
-# Verify package checksum against registry
-npm view <package> dist.integrity
-```
+Output: scan summary (total deps, direct/transitive split, finding counts by severity), Critical/High detail, Medium/Low summary table, supply chain health flags, license compliance status, prioritized remediation plan (P1 immediate / P2 this sprint / P3 monitor). Generate SBOM in CycloneDX format if user requests it.
 
-### Step 6: License Compliance Scan
+## Examples
 
-```bash
-# npm — check all licenses
-npx license-checker --summary
-npx license-checker --failOn 'GPL-3.0;AGPL-3.0'
+**Example 1 -- Node project, Critical finding in transitive dep:**
+Audit finds CVE in `nth-check@1.0.2` (CVSS 7.5), pulled in by `css-select` via `cheerio`. `cheerio` has a newer version that bumps `css-select` to a fixed `nth-check`. Remediation: update `cheerio` (direct dep), not override `nth-check`.
 
-# Python
-pip install pip-licenses
-pip-licenses --format=table
+**Example 2 -- Python project, AGPL dependency discovered:**
+`pip-licenses` reveals `mongodb-driver` using SSPL (AGPL-like). SaaS product cannot use this without open-sourcing. Remediation: replace with `motor` (Apache-2.0) or confirm licensing exception.
 
-# Comprehensive (any ecosystem)
-trivy fs --scanners license .
-```
+## Common Issues
 
-**License compatibility quick reference:**
-
-| License | Commercial Use | Copyleft Risk | Action |
-|---------|---------------|---------------|--------|
-| MIT, BSD, ISC, Apache-2.0 | ✅ Safe | None | No action needed |
-| MPL-2.0 | ✅ Safe | File-level | Keep modified files under MPL |
-| LGPL-2.1/3.0 | ⚠️ Depends | Library-level | OK if dynamically linked, risky if statically linked |
-| GPL-2.0/3.0 | ❌ Risky | Full project | Entire project must be GPL if distributed |
-| AGPL-3.0 | ❌ Risky | Network use | Even SaaS use triggers copyleft |
-| Unlicensed / UNLICENSED | ❌ Risky | Unknown | No permission granted — replace immediately |
-
-### Step 7: Generate SBOM (Software Bill of Materials)
-
-```bash
-# npm — CycloneDX format (industry standard)
-npx @cyclonedx/cyclonedx-npm --output-file sbom.json
-
-# Python
-pip install cyclonedx-bom
-cyclonedx-py environment -o sbom.json
-
-# Trivy — any ecosystem
-trivy fs --format cyclonedx -o sbom.json .
-
-# SPDX format (alternative standard)
-trivy fs --format spdx-json -o sbom-spdx.json .
-```
-
-### Step 8: Build Remediation Plan
-
-For each vulnerability found, document:
-
-```
-VULN: CVE-YYYY-NNNNN
-  Package: <name>@<version>
-  Severity: [Critical/High/Medium/Low] (CVSS X.X)
-  Direct/Transitive: [Direct | Transitive via <parent>]
-  Reachable: [Yes/No/Unknown]
-  Fix Available: [Yes → <version> | No]
-  Remediation: [Update/Override/Replace/Accept Risk]
-  Effort: [Minutes/Hours/Days]
-  Priority: [P1/P2/P3]
-```
-
-**Remediation decision tree:**
-```
-Fix available?
-├── Yes, minor/patch version bump
-│   └── P1: Update immediately (low risk)
-├── Yes, major version bump
-│   ├── Breaking changes manageable? → P1: Schedule migration
-│   └── Breaking changes extensive? → P2: Plan migration, document risk
-├── No fix available
-│   ├── Alternative package exists? → P2: Plan migration to alternative
-│   ├── Vulnerability reachable? → P2: Add compensating controls (WAF rules, input validation)
-│   └── Vulnerability not reachable? → P3: Monitor, accept risk with documentation
-└── Package abandoned
-    └── P1: Find replacement immediately — unmaintained deps accumulate vulnerabilities
-```
-
-### Step 9: Output
-
-```
-━━━ DEPENDENCY AUDIT REPORT ━━━━━━━━━━━━━━
-
-── SCAN SUMMARY ──────────────────────────
-Ecosystem: [npm/pip/cargo/go/etc.]
-Total dependencies: [N] (direct: [X], transitive: [Y])
-Vulnerabilities found: [N] (Critical: X, High: Y, Medium: Z, Low: W)
-
-── CRITICAL & HIGH ───────────────────────
-[detailed findings for Critical and High]
-
-── MEDIUM & LOW ──────────────────────────
-[summary table for Medium and Low]
-
-── SUPPLY CHAIN HEALTH ───────────────────
-[abandoned packages, single-maintainer risks, install scripts]
-
-── LICENSE COMPLIANCE ────────────────────
-[license summary, any copyleft risks]
-
-── REMEDIATION PLAN ──────────────────────
-P1 (Immediate): [list with commands]
-P2 (This sprint): [list with migration notes]
-P3 (Monitor): [list with risk acceptance]
-
-── SBOM ──────────────────────────────────
-Generated: sbom.json (CycloneDX format)
-```
+- **Audit tool reports hundreds of findings:** Filter to production-only first (`--omit=dev`). Apply reachability analysis. Most noise comes from dev tooling.
+- **Transitive dep can't be updated:** The direct parent hasn't released a fix. Use override/resolution as a temporary measure; set a calendar reminder to remove it when the parent updates.
+- **Force-fix introduced breaking changes:** Never auto-apply major version bumps. Dry-run first, review breaking changes, then update with tests.
 
 ## Anti-Patterns
 
-- **Running `npm audit fix --force` blindly**: Force-fixing can introduce breaking major version bumps. Always use `--dry-run` first.
-- **Ignoring transitive vulnerabilities**: "It's not my direct dependency" doesn't mean it's not your problem. Your users are still affected.
-- **Suppressing audit warnings permanently**: If you add an advisory to an ignore list, set a review date. Don't forget about it.
-- **Only scanning in CI, never locally**: Developers should scan before committing, not just in the pipeline. Shift left.
-- **Treating all CVSS scores equally**: A Critical vuln in an unused code path matters less than a Medium vuln in your authentication flow. Context matters.
-- **Using `--no-audit` to make installs faster**: This disables the one check that might catch a compromised package.
+- Running force-fix blindly without dry-run -- introduces breaking major bumps
+- Permanently ignoring advisories without a review date
+- Treating all CVSS scores equally without reachability context
+- Disabling audit in CI to speed up installs -- removes the one check that catches compromised packages
+- Scanning only in CI, never locally -- shift left
 
 ## Escalation
 
 Hand off to a security engineer when:
-- A Critical CVE has known active exploits and affects your production code paths
-- You suspect a supply chain compromise (unexpected code in a package update)
-- License compliance issues could have legal implications (GPL in commercial software)
-- The vulnerability requires understanding of cryptographic primitives to assess
-- Remediation requires coordinated disclosure with the package maintainer
+- Critical CVE with known active exploits affects production code paths
+- Suspected supply chain compromise (unexpected code in package update)
+- License compliance issues with legal implications (GPL/AGPL in commercial software)
+- Vulnerability assessment requires cryptographic expertise
+- Remediation requires coordinated disclosure with maintainer
 
 ## Inputs
-- Project root directory with lock file
-- Package ecosystem (auto-detected)
-- Environment context (production vs development)
-- Compliance requirements (if any)
+
+- Project root with lock file (ecosystem auto-detected)
+- Environment context: production vs full (default: production)
+- Compliance requirements if applicable
 
 ## Outputs
-- Vulnerability scan results with CVSS scores and reachability analysis
-- Supply chain health assessment
-- License compliance report
-- SBOM in CycloneDX or SPDX format
-- Prioritized remediation plan with specific commands
-- Risk register for accepted vulnerabilities
+
+- Vulnerability findings with CVSS, reachability, and remediation path
+- Supply chain health flags
+- License compliance status
+- Prioritized remediation plan (P1/P2/P3)
+- SBOM (CycloneDX, on request)
+
+## CI Integration
+
+Run the ecosystem audit tool as a CI step with a severity threshold gate (fail on Critical/High). Recommended audit frequency: every CI run for committed lock files, weekly scheduled scan for drift detection, immediate re-scan after any dependency update.
 
 ## Level History
 
-- **Lv.1** — Base: Multi-ecosystem scanning (npm/pip/cargo/go/ruby/php), CVSS interpretation with reachability analysis, transitive dependency resolution, supply chain risk assessment, license compliance scanning, SBOM generation, prioritized remediation with decision trees. (Origin: MemStack v3.3, Mar 2026)
+- **Lv.1** -- Base: Multi-ecosystem scanning, CVSS interpretation with reachability analysis, transitive dependency resolution, supply chain risk assessment, license compliance scanning, SBOM generation, prioritized remediation with decision trees. (Origin: MemStack v3.3, Mar 2026)
+- **Lv.2** -- Compressed: Creator-density rewrite. Removed CLI examples and YAML templates. Retained decision trees, severity thresholds, license risk matrix, supply chain indicators. Added validation gates between steps, CI integration concept. (Origin: MemStack v3.4, Mar 2026)

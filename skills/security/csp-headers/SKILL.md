@@ -1,449 +1,156 @@
 ---
 name: csp-headers
-description: "Use when the user says 'CSP', 'Content-Security-Policy', 'security headers', 'HSTS', 'X-Frame-Options', 'clickjacking', 'XSS protection headers', or needs to configure HTTP security headers for a web application. Do NOT use for API endpoint security (see api-audit) or dependency scanning (see dependency-audit)."
+description: "Configure Content-Security-Policy and HTTP security headers. WHEN: 'CSP', 'Content-Security-Policy', 'security headers', 'HSTS', 'X-Frame-Options', 'clickjacking', 'XSS protection headers'. NOT: API endpoint security (api-audit), dependency scanning (dependency-audit), full OWASP assessment (owasp-top10)."
 ---
 
-# 🛡️ CSP & Security Headers — HTTP Security Header Configuration
-*Audit, generate, and deploy Content-Security-Policy and HTTP security headers across web servers and frameworks.*
+# CSP and Security Headers
 
 ## Activation
 
-When this skill activates, output:
-
-`🛡️ CSP & Security Headers — Analyzing and configuring HTTP security headers...`
-
 | Context | Status |
 |---------|--------|
-| **User says "CSP", "security headers", "Content-Security-Policy"** | ACTIVE |
-| **User mentions "HSTS", "X-Frame-Options", "clickjacking protection"** | ACTIVE |
-| **User wants to fix mixed content or frame embedding issues** | ACTIVE |
-| **User wants API endpoint security review** | DORMANT — see api-audit |
-| **User wants dependency vulnerability scanning** | DORMANT — see dependency-audit |
-| **User wants full OWASP assessment** | DORMANT — see owasp-top10 |
+| User says "CSP", "security headers", "Content-Security-Policy" | ACTIVE |
+| User mentions "HSTS", "X-Frame-Options", "clickjacking protection" | ACTIVE |
+| User wants to fix mixed content or frame embedding issues | ACTIVE |
+| User wants API endpoint security review | DORMANT -- see api-audit |
+| User wants dependency vulnerability scanning | DORMANT -- see dependency-audit |
 
-## Protocol
+## Instructions
 
 ### Step 1: Gather Inputs
 
-Ask the user for:
-- **Application URL(s)**: What domains/subdomains need headers?
-- **Tech stack**: What serves the responses? (nginx, Apache, Caddy, Express, Next.js, Cloudflare, etc.)
-- **Current state**: Are any security headers already configured?
-- **Third-party services**: What external scripts/styles/fonts/APIs are loaded? (analytics, CDNs, payment processors, chat widgets)
-- **Iframe requirements**: Does the app need to be embedded in iframes? Does it embed other sites?
-- **Compliance needs**: Any specific requirements? (PCI-DSS, HIPAA, SOC 2)
+Collect: target URL(s), serving platform (nginx/Apache/Caddy/Express/Next.js/Cloudflare/etc.), existing headers if any, third-party scripts/styles/fonts/APIs loaded, iframe requirements (embed others or embedded by others), compliance needs (PCI-DSS, HIPAA, SOC 2).
+
+**Gate:** Do not proceed without at least URL and platform identified.
 
 ### Step 2: Audit Current Headers
 
-Check existing headers using curl:
+Run `curl -sI <url>` and score each header against this checklist:
 
-```bash
-# Check all security-relevant headers
-curl -sI https://example.com | grep -iE '(content-security|strict-transport|x-frame|x-content-type|referrer-policy|permissions-policy|cross-origin|x-xss)'
+| Header | Threat Mitigated |
+|--------|-----------------|
+| `Content-Security-Policy` | XSS, data injection, clickjacking |
+| `Strict-Transport-Security` | Protocol downgrade, MITM |
+| `X-Frame-Options` | Clickjacking (legacy; CSP `frame-ancestors` supersedes) |
+| `X-Content-Type-Options` | MIME sniffing attacks |
+| `Referrer-Policy` | URL-based data leakage |
+| `Permissions-Policy` | Unauthorized browser API access |
+| `Cross-Origin-Opener-Policy` | Cross-origin window reference attacks |
+| `Cross-Origin-Embedder-Policy` | Spectre-class side-channel (enables `SharedArrayBuffer`) |
+| `Cross-Origin-Resource-Policy` | Unauthorized cross-origin resource reads |
 
-# Check for missing headers
-curl -sI https://example.com | head -30
-```
+Grade: A = present + strict, B = present + weak, F = missing. Remove deprecated `X-XSS-Protection` if found (introduces vulnerabilities in older browsers; CSP replaces it).
 
-**Score each header** against this checklist:
+**Gate:** Audit table must be complete before building CSP.
 
-| Header | Present? | Value | Grade |
-|--------|----------|-------|-------|
-| `Content-Security-Policy` | | | |
-| `Strict-Transport-Security` | | | |
-| `X-Frame-Options` | | | |
-| `X-Content-Type-Options` | | | |
-| `Referrer-Policy` | | | |
-| `Permissions-Policy` | | | |
-| `Cross-Origin-Opener-Policy` | | | |
-| `Cross-Origin-Embedder-Policy` | | | |
-| `Cross-Origin-Resource-Policy` | | | |
+### Step 3: Build CSP Directives
 
-**Grading:**
-- 🟢 **A**: Header present with strict, correct value
-- 🟡 **B**: Header present but could be stricter
-- 🔴 **F**: Header missing or misconfigured
+Map each directive to its threat surface:
 
-### Step 3: Build Content-Security-Policy
-
-CSP is the most complex and impactful header. Build it directive by directive.
-
-**Directive Reference:**
-
-| Directive | Controls | Recommended Default |
-|-----------|----------|-------------------|
+| Directive | Controls | Default to |
+|-----------|----------|-----------|
 | `default-src` | Fallback for all fetch directives | `'self'` |
-| `script-src` | JavaScript execution | `'self'` (add nonces for inline) |
-| `style-src` | CSS loading | `'self' 'unsafe-inline'` (or nonces) |
+| `script-src` | JS execution (primary XSS surface) | `'self'` + nonces for inline |
+| `style-src` | CSS loading | `'self'` + nonces preferred over `'unsafe-inline'` |
 | `img-src` | Image loading | `'self' data: https:` |
-| `font-src` | Font loading | `'self'` |
+| `font-src` | Font loading | `'self'` + CDN domains |
 | `connect-src` | XHR, fetch, WebSocket | `'self'` + API domains |
-| `media-src` | Audio/video | `'self'` |
-| `object-src` | Plugins (Flash, etc.) | `'none'` |
-| `frame-src` | Iframes loaded BY the page | `'none'` (unless embedding) |
-| `frame-ancestors` | Who can iframe THIS page | `'none'` (unless embedded) |
+| `object-src` | Plugins (Flash legacy) | `'none'` always |
+| `frame-src` | Iframes loaded BY this page | `'none'` unless embedding |
+| `frame-ancestors` | Who can iframe THIS page | `'none'` unless embedded |
 | `base-uri` | `<base>` tag restriction | `'self'` |
 | `form-action` | Form submission targets | `'self'` |
-| `upgrade-insecure-requests` | Auto-upgrade HTTP to HTTPS | Include always |
-| `block-all-mixed-content` | Block HTTP on HTTPS pages | Include always |
-| `report-uri` / `report-to` | Violation reporting endpoint | Configure for monitoring |
+| `upgrade-insecure-requests` | HTTP to HTTPS auto-upgrade | Always include |
 
-**Decision Tree — Inline Script Strategy:**
+**Nonce vs hash decision:**
+- Inline scripts exist and can be refactored out --> `script-src 'self'` (strictest)
+- Few inline scripts, server renders pages --> nonces (per-request random, added to `<script nonce="...">`)
+- Static inline scripts, no server rendering (SPA) --> hashes (`'sha256-...'`)
+- Last resort only --> `'unsafe-inline'` (negates XSS protection)
 
-```
-Do you have inline <script> tags or onclick handlers?
-├── No → Use `script-src 'self'` (strictest)
-├── Yes, and you CAN refactor them out
-│   └── Refactor to external files → `script-src 'self'`
-├── Yes, but refactoring is impractical
-│   ├── Few inline scripts → Use nonces: `script-src 'nonce-{random}'`
-│   └── Many inline scripts → Use hashes: `script-src 'sha256-{hash}'`
-└── Yes, and you need maximum compatibility
-    └── Last resort: `script-src 'self' 'unsafe-inline'` (weakens XSS protection)
-```
+Nonces require server-side generation (16+ random bytes, base64). Each request gets a fresh nonce. Hash is computed on exact script content; any whitespace change invalidates it.
 
-**Nonce Implementation (recommended for inline scripts):**
+**Trusted Types:** For applications with heavy DOM manipulation, add `require-trusted-types-for 'script'` to prevent DOM XSS. Libraries must be Trusted Types compatible or wrapped.
 
-```javascript
-// Express middleware — generate per-request nonce
-const crypto = require('crypto');
+**Gate:** Each `'unsafe-inline'` or `'unsafe-eval'` inclusion must have a documented justification.
 
-app.use((req, res, next) => {
-  const nonce = crypto.randomBytes(16).toString('base64');
-  res.locals.nonce = nonce;
-  res.setHeader('Content-Security-Policy',
-    `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'nonce-${nonce}'; object-src 'none'; base-uri 'self';`
-  );
-  next();
-});
+### Step 4: Configure Remaining Headers
 
-// In templates: <script nonce="<%= nonce %>">...</script>
-```
+Decision rules for each:
 
-```python
-# FastAPI middleware
-import secrets, base64
+**HSTS:** HTTPS-only with no revert plans --> `max-age=63072000; includeSubDomains`. Add `preload` only when certain (removal from preload list takes months; submit at hstspreload.org). Some subdomains on HTTP --> omit `includeSubDomains`. Uncertain --> start with `max-age=86400` and increase.
 
-@app.middleware("http")
-async def csp_middleware(request, call_next):
-    nonce = base64.b64encode(secrets.token_bytes(16)).decode()
-    request.state.nonce = nonce
-    response = await call_next(request)
-    response.headers["Content-Security-Policy"] = (
-        f"default-src 'self'; script-src 'self' 'nonce-{nonce}'; "
-        f"style-src 'self' 'nonce-{nonce}'; object-src 'none'; base-uri 'self';"
-    )
-    return response
-```
+**X-Frame-Options:** Not embedded --> `DENY`. Same-domain embedding only --> `SAMEORIGIN`. Specific external domains --> use CSP `frame-ancestors` instead (X-Frame-Options cannot allowlist specific domains). Set both for legacy browser compatibility.
 
-**Hash Implementation (for static inline scripts):**
+**Referrer-Policy:** Sensitive data in URLs --> `no-referrer` or `same-origin`. Privacy-conscious default --> `strict-origin-when-cross-origin`. Affiliates need referrer data --> `no-referrer-when-downgrade`.
 
-```bash
-# Generate hash of an inline script
-echo -n 'console.log("hello")' | openssl dgst -sha256 -binary | base64
-# Output: abc123...
-# Use in CSP: script-src 'sha256-abc123...'
-```
+**Permissions-Policy:** Disable unused browser APIs: `camera=(), microphone=(), geolocation=(), payment=(), usb=()`. First-party use --> `camera=(self)`. Specific iframe needs access --> `camera=(self "https://allowed.example.com")`.
 
-**Common Third-Party CSP Allowlists:**
+**Gate:** All headers from the Step 2 checklist must have a configured value before generating platform config.
 
-| Service | Directives Needed |
-|---------|-------------------|
-| Google Analytics | `script-src https://www.googletagmanager.com https://www.google-analytics.com; connect-src https://www.google-analytics.com; img-src https://www.google-analytics.com` |
-| Google Fonts | `style-src https://fonts.googleapis.com; font-src https://fonts.gstatic.com` |
-| Stripe | `script-src https://js.stripe.com; frame-src https://js.stripe.com https://hooks.stripe.com` |
-| YouTube embeds | `frame-src https://www.youtube.com https://www.youtube-nocookie.com` |
-| Cloudflare CDN | `script-src https://cdnjs.cloudflare.com; style-src https://cdnjs.cloudflare.com` |
-| Sentry | `script-src https://browser.sentry-cdn.com; connect-src https://*.ingest.sentry.io` |
-| Intercom | `script-src https://widget.intercom.io; connect-src https://*.intercom.io wss://*.intercom.io; frame-src https://intercom-sheets.com` |
-| Hotjar | `script-src https://static.hotjar.com https://script.hotjar.com; connect-src https://*.hotjar.com wss://*.hotjar.io; frame-src https://vars.hotjar.com; img-src https://static.hotjar.com` |
+### Step 5: Generate Platform Config
 
-### Step 4: Configure All Security Headers
+Produce ready-to-paste configuration for the user's identified platform. Use the `always` flag in nginx `add_header` (without it, error pages lack headers). For Express, prefer `helmet` middleware. For Next.js, use `headers()` in config.
 
-**Complete header set with recommended values:**
+**Gate:** Config must include every header from Steps 3-4. Verify no copy-paste artifacts from other platforms.
 
-```
-# === CRITICAL ===
-Content-Security-Policy: [built in Step 3]
-Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
-X-Content-Type-Options: nosniff
-X-Frame-Options: DENY
+### Step 6: Deploy Report-Only First
 
-# === IMPORTANT ===
-Referrer-Policy: strict-origin-when-cross-origin
-Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+Three-phase rollout -- never skip to enforcing:
 
-# === ADVANCED (Cross-Origin Isolation) ===
-Cross-Origin-Opener-Policy: same-origin
-Cross-Origin-Embedder-Policy: require-corp
-Cross-Origin-Resource-Policy: same-origin
-```
+1. **Report-Only (1-2 weeks):** Use `Content-Security-Policy-Report-Only` header with `report-uri /csp-report`. Collect violations, identify legitimate breakage. Zero enforcement.
+2. **Tighten (1 week):** Allowlist legitimate sources from reports. Remove unnecessary `'unsafe-inline'`/`'unsafe-eval'`. Redeploy as report-only.
+3. **Enforce:** Switch to `Content-Security-Policy`. Monitor 48 hours post-deploy. Keep `report-uri` active permanently.
 
-**Header-by-header decision guide:**
+**Gate:** User must confirm report-only results reviewed before recommending enforcement switch.
 
-**Strict-Transport-Security (HSTS):**
-```
-Is the site HTTPS-only with no plans to revert?
-├── Yes, single domain → max-age=63072000; includeSubDomains
-├── Yes, ready for browser preload → max-age=63072000; includeSubDomains; preload
-│   └── Then submit to https://hstspreload.org
-├── Yes, but some subdomains are HTTP → max-age=63072000 (no includeSubDomains)
-└── No / unsure → Start with max-age=86400 (1 day), increase gradually
-```
+## Examples
 
-**X-Frame-Options:**
-```
-Does this site need to be embedded in iframes?
-├── No → DENY
-├── Yes, only by same domain → SAMEORIGIN
-└── Yes, by specific domains → Use CSP frame-ancestors instead
-    (X-Frame-Options cannot allowlist specific domains)
-```
+**SPA with Google Analytics and Stripe:** `default-src 'self'` base. Add GA domains to `script-src` and `connect-src`, Stripe to `script-src` and `frame-src`. Use nonces for any inline bootstrap scripts. `object-src 'none'; frame-ancestors 'none'`.
 
-**Referrer-Policy:**
-```
-Does the site pass sensitive data in URLs (tokens, user IDs)?
-├── Yes → no-referrer or same-origin
-├── No, but privacy-conscious → strict-origin-when-cross-origin (recommended default)
-└── No, and affiliates need referrer data → no-referrer-when-downgrade
-```
+**Static marketing site, no inline JS:** `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https:; object-src 'none'; frame-ancestors 'none'; upgrade-insecure-requests`. Strictest posture; no nonces/hashes needed.
 
-**Permissions-Policy:**
-```
-Does the site use browser APIs (camera, mic, geolocation, payment)?
-├── No → Disable all: camera=(), microphone=(), geolocation=(), payment=(), usb=()
-├── Yes, first-party only → camera=(self), microphone=(self), etc.
-└── Yes, specific iframes need access → camera=(self "https://meet.example.com")
-```
+## Common Issues
 
-### Step 5: Generate Platform-Specific Configuration
-
-**Nginx:**
-```nginx
-# /etc/nginx/conf.d/security-headers.conf
-# Include in server blocks: include /etc/nginx/conf.d/security-headers.conf;
-
-add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests;" always;
-add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
-add_header X-Content-Type-Options "nosniff" always;
-add_header X-Frame-Options "DENY" always;
-add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()" always;
-add_header Cross-Origin-Opener-Policy "same-origin" always;
-add_header Cross-Origin-Resource-Policy "same-origin" always;
-```
-
-**Apache (.htaccess):**
-```apache
-<IfModule mod_headers.c>
-    Header always set Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; upgrade-insecure-requests;"
-    Header always set Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
-    Header always set X-Content-Type-Options "nosniff"
-    Header always set X-Frame-Options "DENY"
-    Header always set Referrer-Policy "strict-origin-when-cross-origin"
-    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
-</IfModule>
-```
-
-**Caddy (Caddyfile):**
-```
-example.com {
-    header {
-        Content-Security-Policy "default-src 'self'; script-src 'self'; object-src 'none';"
-        Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
-        X-Content-Type-Options "nosniff"
-        X-Frame-Options "DENY"
-        Referrer-Policy "strict-origin-when-cross-origin"
-        Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
-    }
-}
-```
-
-**Express.js (using helmet):**
-```javascript
-const helmet = require('helmet');
-
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'"],
-      fontSrc: ["'self'"],
-      objectSrc: ["'none'"],
-      frameAncestors: ["'none'"],
-      baseUri: ["'self'"],
-      formAction: ["'self'"],
-      upgradeInsecureRequests: [],
-    },
-  },
-  strictTransportSecurity: {
-    maxAge: 63072000,
-    includeSubDomains: true,
-    preload: true,
-  },
-  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
-  frameguard: { action: 'deny' },
-}));
-```
-
-**Next.js (next.config.js):**
-```javascript
-const securityHeaders = [
-  { key: 'Content-Security-Policy', value: "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none';" },
-  { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
-  { key: 'X-Content-Type-Options', value: 'nosniff' },
-  { key: 'X-Frame-Options', value: 'DENY' },
-  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=()' },
-];
-
-module.exports = {
-  async headers() {
-    return [{ source: '/(.*)', headers: securityHeaders }];
-  },
-};
-```
-
-**Cloudflare Workers:**
-```javascript
-export default {
-  async fetch(request) {
-    const response = await fetch(request);
-    const newResponse = new Response(response.body, response);
-
-    newResponse.headers.set('Content-Security-Policy', "default-src 'self'; object-src 'none';");
-    newResponse.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
-    newResponse.headers.set('X-Content-Type-Options', 'nosniff');
-    newResponse.headers.set('X-Frame-Options', 'DENY');
-    newResponse.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-    newResponse.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
-
-    return newResponse;
-  }
-};
-```
-
-### Step 6: CSP Rollout Strategy — Report-Only First
-
-**Never deploy CSP in enforcing mode without testing first.**
-
-```
-Phase 1 (Week 1-2): Report-Only
-  Header: Content-Security-Policy-Report-Only: [your policy]; report-uri /csp-report
-  → Collect violations, identify legitimate breakage
-
-Phase 2 (Week 3): Tighten Policy
-  → Whitelist legitimate sources found in reports
-  → Remove unnecessary 'unsafe-inline' / 'unsafe-eval'
-  → Re-deploy as Report-Only
-
-Phase 3 (Week 4): Enforce
-  Header: Content-Security-Policy: [final policy]; report-uri /csp-report
-  → Monitor for 48 hours post-deploy
-  → Keep report-uri active permanently
-```
-
-**CSP violation report endpoint (Express):**
-```javascript
-app.post('/csp-report', express.json({ type: 'application/csp-report' }), (req, res) => {
-  const violation = req.body['csp-report'];
-  console.warn('CSP Violation:', {
-    blockedURI: violation['blocked-uri'],
-    violatedDirective: violation['violated-directive'],
-    documentURI: violation['document-uri'],
-    sourceFile: violation['source-file'],
-    lineNumber: violation['line-number'],
-  });
-  res.status(204).end();
-});
-```
-
-### Step 7: Debugging CSP Violations
-
-**Common violations and fixes:**
-
-| Violation | Cause | Fix |
-|-----------|-------|-----|
-| `Refused to execute inline script` | Inline `<script>` without nonce/hash | Add nonce or move to external file |
-| `Refused to load the stylesheet` | External CSS not in `style-src` | Add domain to `style-src` |
-| `Refused to connect to` | fetch/XHR to unlisted domain | Add domain to `connect-src` |
-| `Refused to frame` | iframe src not in `frame-src` | Add domain to `frame-src` |
-| `Refused to load the image` | Image from unlisted source | Add domain to `img-src` |
-| `eval is not allowed` | Library uses `eval()` | Add `'unsafe-eval'` to `script-src` (risky) or find alternative library |
-| `Refused to load the font` | Web font from unlisted CDN | Add CDN to `font-src` |
-
-**Browser DevTools**: Open Console and filter by "CSP" or "Content Security Policy" to see all violations in real time.
-
-### Step 8: Output
-
-Present the complete security headers configuration:
-
-```
-━━━ SECURITY HEADERS REPORT ━━━━━━━━━━━━━━
-
-── CURRENT STATE ─────────────────────────
-[audit results table from Step 2]
-Overall Grade: [A-F]
-
-── CONTENT-SECURITY-POLICY ───────────────
-[full CSP directive with comments]
-
-── ALL HEADERS ───────────────────────────
-[complete header set]
-
-── PLATFORM CONFIG ───────────────────────
-[ready-to-paste config for their platform]
-
-── ROLLOUT PLAN ──────────────────────────
-Phase 1: Report-Only (2 weeks)
-Phase 2: Tighten (1 week)
-Phase 3: Enforce (ongoing)
-
-── THIRD-PARTY ALLOWLIST ─────────────────
-[services detected and their required directives]
-
-── MONITORING ────────────────────────────
-[CSP report endpoint setup]
-```
+1. **`eval is not allowed` from libraries:** Some libraries (template engines, charting libs) use `eval()`. Adding `'unsafe-eval'` weakens CSP. Prefer libraries that don't require it. If unavoidable, isolate to that specific `script-src` entry and document the risk.
+2. **Inline styles break after CSP:** Frameworks (React, styled-components) inject inline styles. Use nonces in SSR or accept `'unsafe-inline'` in `style-src` (lower risk than in `script-src` since style injection rarely enables code execution).
+3. **Third-party widget loads cascade:** Chat widgets, analytics, and ad scripts often load additional sub-resources from undocumented domains. Report-only phase catches these. Expect 2-3 iterations to stabilize allowlists.
 
 ## Anti-Patterns
 
-- **`unsafe-inline` + `unsafe-eval` everywhere**: Defeats the purpose of CSP entirely. If you need both on all directives, fix the root cause instead.
-- **Copy-pasting CSP from another site**: Every site has different third-party dependencies. Always build CSP from your actual resource loading.
-- **Deploying CSP in enforcing mode without Report-Only first**: Will break your site in production. Always test first.
-- **Forgetting `always` in nginx `add_header`**: Without `always`, headers aren't sent on error pages (404, 500), leaving them unprotected.
-- **Setting HSTS `preload` without understanding**: Once in the preload list, removing your domain takes months. Only preload when you're certain HTTPS is permanent.
-- **Using `X-XSS-Protection: 1; mode=block`**: This header is deprecated and can actually introduce vulnerabilities in older browsers. Remove it; CSP is the replacement.
-- **Ignoring `frame-ancestors` in CSP**: `X-Frame-Options` is the legacy approach. CSP `frame-ancestors` is more flexible and takes precedence in modern browsers. Set both for compatibility.
+- `'unsafe-inline' + 'unsafe-eval'` on all directives -- defeats CSP entirely; fix root cause instead
+- Copy-pasting CSP from another site -- every site has different dependencies; build from actual resource loading
+- Deploying enforcing CSP without report-only phase -- will break production
+- Setting HSTS `preload` casually -- removal takes months once submitted
+- Omitting `always` in nginx `add_header` -- error pages (404, 500) left unprotected
+- Ignoring `frame-ancestors` in CSP and relying solely on `X-Frame-Options` -- CSP is more flexible and takes precedence in modern browsers
 
 ## Escalation
 
-Hand off to a security specialist when:
-- The application processes payments (PCI-DSS has specific header requirements)
-- Cross-origin isolation is needed for SharedArrayBuffer (COOP/COEP interactions are complex)
-- The site uses Service Workers with complex caching (CSP interactions with SW are tricky)
-- Multiple teams own different parts of the same domain (CSP coordination across teams)
-- You need to pass a specific compliance audit (SOC 2, ISO 27001)
+Hand off to security specialist when:
+- Payment processing is involved (PCI-DSS has specific header requirements)
+- Cross-origin isolation needed for `SharedArrayBuffer` (COOP/COEP interactions are complex)
+- Service Workers with complex caching interact with CSP
+- Multiple teams own different parts of the same domain (CSP coordination)
+- Specific compliance audit required (SOC 2, ISO 27001)
 
 ## Inputs
-- Application URL(s) and tech stack
+
+- Application URL(s) and serving platform
 - Current security headers (if any)
 - Third-party services and CDNs in use
 - Iframe embedding requirements
 - Compliance requirements
 
 ## Outputs
+
 - Current headers audit with grades
-- Complete CSP built directive-by-directive
-- Full security headers set with recommended values
-- Platform-specific configuration (nginx/Apache/Caddy/Express/Next.js/Cloudflare)
-- Report-Only rollout plan
-- CSP violation report endpoint
-- Third-party allowlist documentation
+- CSP built directive-by-directive with justifications
+- Full security headers set
+- Platform-specific configuration (ready to paste)
+- Report-only rollout plan with phases
 
 ## Level History
 
-- **Lv.1** — Base: Directive-by-directive CSP builder, all major security headers with decision trees, platform configs for 6 server types, nonce and hash implementation, report-only rollout strategy, violation debugging guide, third-party allowlist reference. (Origin: MemStack v3.3, Mar 2026)
+- **Lv.1** -- Base: Directive-by-directive CSP builder, all major security headers with decision trees, platform configs for 6 server types, nonce and hash implementation, report-only rollout strategy, violation debugging guide, third-party allowlist reference. (Origin: MemStack v3.3, Mar 2026)
+- **Lv.2** -- Compressed: Removed full config blocks and code samples, retained decision logic and directive mapping, added validation gates, added Trusted Types concept, tightened anti-patterns. (Origin: MemStack v3.4, Mar 2026)
