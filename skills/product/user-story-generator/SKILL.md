@@ -1,213 +1,103 @@
 ---
 name: user-story-generator
-description: "Use when the user says 'user stories', 'write stories', 'backlog', 'story generator', 'acceptance criteria', 'sprint planning', or needs structured user stories for project management tools."
+description: "Use when the user says 'user stories', 'write stories', 'backlog', 'story generator', 'acceptance criteria', 'sprint planning', or needs structured user stories for project management tools. Do NOT use for full PRDs (see prd-writer), detailed single-feature specs (see feature-spec), or product roadmaps (see roadmap-builder)."
 ---
 
+# User Story Generator -- Backlog-Ready Story Builder
 
-# 📝 User Story Generator — Backlog-Ready Story Builder
 *Generate prioritized user stories with acceptance criteria, story points, and epic groupings ready for Jira, Linear, or GitHub Projects.*
 
 ## Activation
 
 When this skill activates, output:
 
-`📝 User Story Generator — Building your story backlog...`
+`User Story Generator -- Building your story backlog...`
 
 | Context | Status |
 |---------|--------|
 | **User says "user stories", "write stories", "backlog"** | ACTIVE |
 | **User needs stories for sprint planning** | ACTIVE |
 | **User wants acceptance criteria in Given/When/Then** | ACTIVE |
-| **User wants a full PRD (stories are one section)** | DORMANT — see prd-writer |
-| **User wants a detailed spec for ONE feature** | DORMANT — see feature-spec |
+| **User wants a full PRD (stories are one section)** | DORMANT -- see prd-writer |
+| **User wants a detailed spec for ONE feature** | DORMANT -- see feature-spec |
 
-## Protocol
+## Instructions
 
 ### Step 1: Gather Inputs
 
 Ask the user for:
 - **Product/feature context**: What are we writing stories for?
-- **User types**: Who are the different users? (e.g., admin, end user, viewer)
+- **User types**: Who are the different users? (admin, end user, viewer, etc.)
 - **Scope**: Full product backlog or specific feature area?
 - **Sprint duration**: 1 week or 2 weeks? (for story point calibration)
-- **Existing context**: PRD, wireframes, or feature list (optional)
+- **Existing context** (optional): PRD, wireframes, feature list
+
+**Gate**: Must have product context and at least one user type before proceeding.
 
 ### Step 2: Define Personas
 
-For each user type, create a brief persona card:
+Brief card per user type: name, role, primary goal, usage context, tech level (low/med/high).
 
-```
-👤 [Persona Name] — [Role]
-   Goal: [primary goal]
-   Context: [how/when/where they use the product]
-   Tech level: [low/medium/high]
-```
+### Step 3: Generate Stories
 
-### Step 3: Generate User Stories by Persona
-
-For each persona, generate stories grouped by functional area:
-
-```
-── [Persona Name] Stories ─────────────────
-
-US-001: As a [persona], I want to [action] so that [benefit].
-US-002: As a [persona], I want to [action] so that [benefit].
-US-003: As a [persona], I want to [action] so that [benefit].
-```
-
-Story writing rules:
+For each persona, generate stories grouped by functional area. Rules:
 - Action must be specific and observable ("filter results by date" not "have better search")
 - Benefit must explain WHY, not restate the action
 - One story = one testable behavior
-- If a story needs "and" in the action, split it into two stories
+- If a story needs "and" in the action, split it
 
-### Step 4: Add Acceptance Criteria
+**Gate**: Every story must reference a defined persona. No "As a user" -- use the specific persona name/role.
 
-For each story, write 2-4 acceptance criteria in Given/When/Then:
+### Step 4: Acceptance Criteria
 
-```
-US-001: As a [persona], I want to [action] so that [benefit].
-
-  AC-1: Given [precondition]
-        When [user action]
-        Then [expected result]
-
-  AC-2: Given [edge case condition]
-        When [user action]
-        Then [expected handling]
-
-  AC-3: Given [error condition]
-        When [user action]
-        Then [error response]
-```
+2-4 criteria per story in Given/When/Then format. Must cover: happy path, at least one edge case, at least one error condition.
 
 ### Step 5: MoSCoW Priority
 
-Assign priority to each story:
+Assign each story: Must (product does not work without it), Should (important but has workaround), Could (enhances experience), Won't (deferred).
 
-| Priority | Meaning | Criteria |
-|----------|---------|----------|
-| **Must** | Required for launch | Product doesn't work without it |
-| **Should** | Expected by users | Important but has workaround |
-| **Could** | Nice to have | Enhances experience, not critical |
-| **Won't** | Deferred to future | Acknowledged but not in this cycle |
+**Gate**: If > 50% of stories are "Must", re-evaluate. A backlog where everything is critical means nothing is prioritized.
 
 ### Step 6: Story Point Estimates
 
-Estimate complexity using Fibonacci scale (1, 2, 3, 5, 8, 13):
-
-| Points | Complexity | Typical Work |
-|--------|-----------|--------------|
-| **1** | Trivial | Copy change, config update |
-| **2** | Simple | Single component, clear implementation |
-| **3** | Moderate | Multiple components, some unknowns |
-| **5** | Complex | Cross-cutting, integration work |
-| **8** | Very complex | Significant unknowns, research needed |
-| **13** | Epic-level | Should be broken down further |
-
-Flag any story estimated at 13+ for breakdown.
+Fibonacci scale (1, 2, 3, 5, 8, 13). Flag any story at 13+ for breakdown into smaller stories.
 
 ### Step 7: Group into Epics
 
-Organize stories into epics for sprint planning:
+Organize into epics (13-40 points each, roughly 1-2 sprints). Each epic: description, total points, story count, ordered story list with priority and points.
 
-```
-━━━ EPIC: [Epic Name] ━━━━━━━━━━━━━━━━━━━━
-Description: [what this epic delivers]
-Total points: [sum]
-Stories: [count]
+### Step 8: Dependencies and Sprint Loading
 
-  US-001 [Must]  (3pts) [story title]
-  US-002 [Must]  (2pts) [story title]
-  US-003 [Should](5pts) [story title]
+Map blocking relationships between stories. Flag circular dependencies as risks. Suggest sprint loading: Sprint 1 = foundation stories, Sprint 2 = core features, Sprint 3 = enhancements.
 
-━━━ EPIC: [Epic Name] ━━━━━━━━━━━━━━━━━━━━
-...
-```
+### Step 9: Assemble Output
 
-Recommended epic size: 13-40 story points (roughly 1-2 sprints).
+Sections: Personas, Epics with stories/AC/priority/points, Dependencies, Sprint Suggestion, CSV Export (Epic, Story ID, Title, Description, Priority, Points, AC -- for Jira/Linear/GitHub import).
 
-### Step 8: Identify Dependencies
+## Examples
 
-Map dependencies between stories:
+**Example 1 -- E-commerce feature**:
+User: "User stories for a product review system." Output: 2 personas (buyer, store admin), 3 epics (Submit Review, Moderate Reviews, Display Reviews), 14 stories, 42 total points. Sprint 1: data model + submit flow (13 pts). Sprint 2: moderation queue + display (16 pts). Sprint 3: sorting, filtering, helpful votes (13 pts).
 
-```
-DEPENDENCY MAP:
-  US-005 → blocks → US-008 (need auth before profile)
-  US-003 → blocks → US-012 (need data model before reports)
-  US-001 → blocks → US-002, US-003 (foundation story)
-```
+**Example 2 -- Internal tool**:
+User: "Stories for an employee time-off request system." Output: 3 personas (employee, manager, HR admin), 2 epics (Request Flow, Admin Management), 9 stories, 28 points. Key dependency: manager approval flow blocks HR reporting.
 
-Flag circular dependencies as risks. Recommend implementation sequence.
+## Common Issues
 
-**Sprint loading suggestion:**
-- Sprint 1: Foundation stories (US-001, US-003, ...) — [X pts]
-- Sprint 2: Core features (US-005, US-008, ...) — [X pts]
-- Sprint 3: Enhancement stories (US-012, ...) — [X pts]
+- **Stories that are tasks, not user value**: "Set up database" is a task. "As a user, I want my data saved so I can return to my work" is a story. Every story must deliver user-visible value.
+- **Missing error-path acceptance criteria**: If AC only covers the happy path, the developer does not know how to handle failures. Every story needs at least one error AC.
+- **Epic bloat**: Epics over 40 points should be split. An epic that spans 3+ sprints loses its value as a planning unit.
 
-### Step 9: Output
+## Anti-Patterns
 
-Present the complete backlog:
-
-```
-━━━ USER STORY BACKLOG ━━━━━━━━━━━━━━━━━━━━
-Product: [name]
-Personas: [count]
-Stories: [total count]
-Total points: [sum]
-Epics: [count]
-
-── PERSONAS ───────────────────────────────
-[persona cards]
-
-── EPIC 1: [Name] ─────────────────────────
-US-001 [Must] (3pts): As a..., I want..., so that...
-  AC-1: Given... When... Then...
-  AC-2: Given... When... Then...
-
-US-002 [Must] (2pts): As a..., I want..., so that...
-  AC-1: Given... When... Then...
-  ...
-
-── EPIC 2: [Name] ─────────────────────────
-...
-
-── DEPENDENCIES ───────────────────────────
-[dependency map]
-
-── SPRINT SUGGESTION ──────────────────────
-Sprint 1: [stories] — [X pts]
-Sprint 2: [stories] — [X pts]
-Sprint 3: [stories] — [X pts]
-
-── EXPORT FORMAT ──────────────────────────
-[CSV or structured format for import]
-```
-
-**Export format** (for tool import):
-
-```csv
-Epic,Story ID,Title,Description,Priority,Points,Acceptance Criteria
-[epic],[id],[title],[full story text],[must/should/could],[pts],[AC text]
-```
-
-## Inputs
-- Product or feature context
-- User types / personas
-- Scope (full product or specific area)
-- Sprint duration (optional)
-- Existing PRD or feature list (optional)
-
-## Outputs
-- Persona cards for each user type
-- User stories in standard format grouped by persona
-- Acceptance criteria in Given/When/Then per story
-- MoSCoW priority assignment
-- Fibonacci story point estimates
-- Epic groupings with point totals
-- Dependency map with sprint loading suggestion
-- CSV export format for Jira/Linear/GitHub Projects import
+- Writing "As a user" instead of a specific persona
+- Combining multiple behaviors in one story ("and" in the action)
+- Acceptance criteria that are not testable ("should work well")
+- Estimating all stories as 3 or 5 points without differentiation
+- Skipping the dependency map and discovering blockers mid-sprint
+- Building a backlog without export format for the team's project management tool
 
 ## Level History
 
-- **Lv.1** — Base: Persona-grouped story generation, Given/When/Then acceptance criteria, MoSCoW prioritization, Fibonacci story point estimation, epic groupings, dependency mapping with sprint loading, CSV export format for tool import. (Origin: MemStack v3.2, Mar 2026)
+- **Lv.1** -- Base: Persona-grouped story generation, Given/When/Then acceptance criteria, MoSCoW prioritization, Fibonacci story point estimation, epic groupings, dependency mapping with sprint loading, CSV export format for tool import. (Origin: MemStack v3.2, Mar 2026)
+- **Lv.2** -- Guide compliance: Added negative triggers, validation gates, Examples, Common Issues, Anti-Patterns. Compressed from 213 to <200 lines. (Origin: MemStack v3.3, Mar 2026)

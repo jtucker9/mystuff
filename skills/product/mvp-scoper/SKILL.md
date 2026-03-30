@@ -1,28 +1,27 @@
 ---
 name: mvp-scoper
-description: "Use when the user says 'MVP', 'minimum viable product', 'scope the MVP', 'strip to minimum', 'what to build first', or needs to ruthlessly cut a product idea down to its fastest-to-validate form."
+description: "Use when the user says 'MVP', 'minimum viable product', 'scope the MVP', 'strip to minimum', 'what to build first', or needs to ruthlessly cut a product idea down to its fastest-to-validate form. Do NOT use for full product requirements (see prd-writer), post-MVP roadmap planning (see roadmap-builder), or detailed feature specs (see feature-spec)."
 ---
 
+# MVP Scoper -- Minimum Viable Product Definition
 
-# 🎯 MVP Scoper — Minimum Viable Product Definition
 *Strip a product idea to its core hypothesis, define the smallest build that proves it, and plan the fastest path to validation.*
 
 ## Activation
 
 When this skill activates, output:
 
-`🎯 MVP Scoper — Scoping your minimum viable product...`
+`MVP Scoper -- Scoping your minimum viable product...`
 
 | Context | Status |
 |---------|--------|
 | **User says "MVP", "minimum viable product", "scope the MVP"** | ACTIVE |
 | **User wants to cut features to build faster** | ACTIVE |
 | **User asks "what should I build first?"** | ACTIVE |
-| **User wants a full PRD (not just MVP scope)** | DORMANT — see prd-writer |
-| **User wants a roadmap beyond MVP** | DORMANT — see roadmap-builder |
-| **User wants project tier assessment** | DORMANT — see governor skill |
+| **User wants a full PRD (not just MVP scope)** | DORMANT -- see prd-writer |
+| **User wants a roadmap beyond MVP** | DORMANT -- see roadmap-builder |
 
-## Protocol
+## Instructions
 
 ### Step 1: Gather Inputs
 
@@ -33,201 +32,78 @@ Ask the user for:
 - **Budget constraint**: Solo dev, small team, or funded team?
 - **Validation goal**: What hypothesis are you testing?
 
-### Step 2: Identify Core Value Proposition
+**Gate**: Must have product idea and target market before proceeding.
 
-Force clarity with the "one sentence" test:
+### Step 2: Core Value Proposition
 
-> "[Product] helps [target user] to [solve problem] by [unique mechanism]."
+Force the one-sentence test: "[Product] helps [target user] to [solve problem] by [unique mechanism]." If the user cannot fill this in, the idea needs refinement before scoping.
 
-If the user can't fill this in clearly, the idea needs refinement before scoping.
+Define the core loop: ONE repeated user action, ONE outcome that keeps them coming back. Strip everything that does not serve this loop.
 
-**The Core Loop:**
-- What is the ONE action users must take repeatedly?
-- What is the ONE outcome that keeps them coming back?
-- Strip everything that doesn't serve this loop.
+**Gate**: If the user describes more than one core loop, they have multiple products. Pick one or split the scoping.
 
 ### Step 3: Feature Triage
 
-Take the full feature wishlist and ruthlessly categorize:
+Categorize every feature as IN / OUT / MAYBE with rationale:
 
-| Feature | MVP? | Rationale |
-|---------|------|-----------|
-| [feature] | ✅ IN | [why it's essential for the hypothesis] |
-| [feature] | ❌ OUT | [why it can wait — what workaround exists] |
-| [feature] | ❌ OUT | [why it's a nice-to-have, not a must] |
-| [feature] | ⚠️ MAYBE | [include only if [condition]] |
-
-**Triage rules:**
-- If removing it doesn't prevent the user from getting the core value → OUT
-- If it can be done manually instead of automated → OUT (for now)
-- If only 1 in 10 users would use it → OUT
-- If it requires a new integration or service → OUT (unless it IS the core)
-- Auth/login → only if data must persist across sessions
-- Admin dashboard → OUT (use database queries)
-- Analytics → OUT (use Mixpanel/PostHog free tier)
-- Email notifications → OUT (unless core to the loop)
+Triage rules:
+- Removing it does not prevent core value -> OUT
+- Can be done manually instead of automated -> OUT
+- Only 1 in 10 users would use it -> OUT
+- Requires new integration -> OUT (unless it IS the core)
+- Auth -> only if data must persist across sessions
+- Admin dashboard -> OUT (use DB queries)
+- Analytics -> OUT (use free tier tools)
+- Email notifications -> OUT (unless core to the loop)
 
 ### Step 4: MVP vs V2 Scope
 
-Present a clear boundary:
-
-```
-━━━ MVP (Ship This) ━━━━━━━━━━━━━━━━━━━━━━
-• [feature 1] — [why essential]
-• [feature 2] — [why essential]
-• [feature 3] — [why essential]
-Hypothesis tested: [what you'll learn]
-
-━━━ V2 (Ship After Validation) ━━━━━━━━━━━
-• [feature A] — [trigger: add when X users do Y]
-• [feature B] — [trigger: add when retention > Z%]
-• [feature C] — [trigger: add when revenue hits $X]
-
-━━━ BACKLOG (Maybe Never) ━━━━━━━━━━━━━━━━
-• [feature X] — [only if market demands it]
-• [feature Y] — [only if pivot in this direction]
-```
-
-Each V2 feature has a **trigger condition** — a specific metric or event that justifies adding it.
+Present three tiers: MVP (ship this), V2 (ship after validation), Backlog (maybe never). Each V2 feature must have a trigger condition -- a specific metric or event that justifies adding it.
 
 ### Step 5: Tech Stack Recommendation
 
-Recommend the fastest stack for the constraints:
-
-| Constraint | Recommended Stack | Why |
-|-----------|-------------------|-----|
-| Solo dev, ship in 2 weeks | Next.js + Supabase + Vercel | Full-stack in one framework, free tier hosting |
-| Solo dev, mobile needed | React Native/Expo + Supabase | Cross-platform, rapid iteration |
-| Team of 2-3, ship in 4 weeks | Next.js + PostgreSQL + Railway | Scalable from day one |
-| Non-technical founder | No-code: Bubble/Softr/Webflow | Ship without engineering |
-| API/data product | FastAPI + PostgreSQL + Fly.io | Lightweight, fast to build |
-
-Principles:
-- Use what you already know — learning = time
-- Managed services over self-hosted — ops overhead kills MVPs
-- Free tiers first — don't spend before validating
-- Monolith over microservices — always for MVP
+Recommend the fastest stack for the constraints. Principles: use what you know (learning = time), managed services over self-hosted, free tiers first, monolith over microservices.
 
 ### Step 6: Build Estimate
 
-Estimate time and cost:
+Per-feature effort estimate with complexity rating. Total with 1.5x buffer. Cost estimate covering hosting, services, domain, dev cost.
 
-```
-── BUILD ESTIMATE ─────────────────────────
+**Gate**: If total exceeds timeline constraint, return to Step 3 and cut more features.
 
-Feature 1: [name]
-  Effort: [X days]
-  Complexity: [low/med/high]
+### Step 7: Launch Criteria and Risk Assessment
 
-Feature 2: [name]
-  Effort: [X days]
-  Complexity: [low/med/high]
+Launch checklist: core loop works e2e, onboarding under X minutes, data persists, landing page exists, beta users lined up. Explicitly list what is NOT required (perfect UI, full error handling, automated tests, CI/CD, docs).
 
-Feature 3: [name]
-  Effort: [X days]
-  Complexity: [low/med/high]
+Risk table: likelihood, impact, mitigation for each risk. Include pre-validation questions: Can you sell it with a waitlist? Can you deliver value manually for 5 users? Have 10 people said "I'd pay for this"?
 
-──────────────────────────────────────────
-Total dev time: [X days/weeks]
-Buffer (1.5x): [X days/weeks]
-Realistic ship date: [date]
+### Step 8: Assemble Output
 
-Cost estimate:
-  Hosting: $[X]/mo (free tier if possible)
-  Services: $[X]/mo
-  Domain: $[X]/yr
-  Dev cost: $[X] (if hiring) or $0 (if self)
-```
+Sections: Hypothesis, MVP Scope (IN/OUT), Tech Stack, Build Plan, Launch Criteria, Risks, Validation Plan (before build / after launch / decision point for persevere-pivot-kill).
 
-### Step 7: Launch Criteria
+## Examples
 
-Define what "done" means for MVP:
+**Example 1 -- SaaS tool**:
+User: "I want to build an AI meeting note-taker for remote teams." Output: Core loop = record meeting -> get summary. MVP IN: Chrome extension, transcription, summary. OUT: calendar sync, action item tracking, CRM integration. Stack: Next.js + Whisper API + Vercel. 3-week build.
 
-**Launch checklist:**
-- [ ] Core loop works end-to-end (user can [action] and get [result])
-- [ ] Can onboard a new user in under [X] minutes without help
-- [ ] Data doesn't get lost (basic persistence works)
-- [ ] Payments work (if monetized from day 1)
-- [ ] Landing page exists with clear value proposition
-- [ ] At least [X] beta users lined up to try it
+**Example 2 -- Marketplace**:
+User: "A marketplace connecting freelance CFOs with startups." Output: Core loop = post need -> get matched. MVP IN: profile creation, manual matching by founder, Stripe checkout. OUT: automated matching, chat, reviews. Stack: Webflow + Airtable + Zapier. 2-week build. Pre-validation: manually match 5 pairs first.
 
-**NOT required for launch:**
-- [ ] ~~Perfect UI~~ — functional is fine
-- [ ] ~~Error handling for every edge case~~ — crash and learn
-- [ ] ~~Automated testing~~ — manual testing is fine for MVP
-- [ ] ~~CI/CD pipeline~~ — git push to deploy is fine
-- [ ] ~~Documentation~~ — the product should be self-explanatory
+## Common Issues
 
-### Step 8: Risk Assessment
+- **User resists cutting features**: Reframe: "Would you rather launch in 6 months with everything or 3 weeks with the core and real user data?" Every deferred feature has a trigger condition for re-adding.
+- **No clear hypothesis**: Without a testable hypothesis, the MVP has no success criteria. Push until you get "We believe [users] will [action] because [reason], measured by [signal]."
+- **Tech stack bikeshedding**: Default to whatever the builder already knows. New tech = hidden weeks of learning. Override only if the product literally cannot be built with known tools.
 
-Identify what could invalidate the MVP hypothesis:
+## Anti-Patterns
 
-| Risk | Likelihood | Impact | Mitigation |
-|------|-----------|--------|------------|
-| Users don't have this problem | Medium | Fatal | Pre-sell or waitlist validation first |
-| Solution too complex to use | Medium | High | User test with 3 people before building |
-| Can't build it in time | Low | High | Cut scope further, not timeline |
-| Market already saturated | Low | Medium | Find differentiated niche |
-| Technical infeasibility | Low | Fatal | Prototype the hardest part first |
-
-**Pre-validation suggestions:**
-- Before building: Can you sell it with a landing page and waitlist?
-- Before building: Can you deliver the value manually for 5 users?
-- Before building: Have 10 people said "I'd pay for this"?
-
-### Step 9: Output
-
-Present the complete MVP scope document:
-
-```
-━━━ MVP SCOPE DOCUMENT ━━━━━━━━━━━━━━━━━━━
-Product: [name]
-One-liner: [value proposition]
-Target: [user]
-Timeline: [X weeks]
-
-── HYPOTHESIS ─────────────────────────────
-We believe [target users] will [use product] because [reason].
-We'll know this is true when [measurable signal].
-
-── MVP SCOPE ──────────────────────────────
-IN: [feature list with rationale]
-OUT: [deferred features with triggers]
-
-── TECH STACK ─────────────────────────────
-[recommended stack with justification]
-
-── BUILD PLAN ─────────────────────────────
-[feature-by-feature estimate]
-Ship date: [date]
-
-── LAUNCH CRITERIA ────────────────────────
-[checklist]
-
-── RISKS ──────────────────────────────────
-[risk table with mitigations]
-
-── VALIDATION PLAN ────────────────────────
-Before build: [pre-validation steps]
-After launch: [metrics to watch]
-Decision point: [when to persevere, pivot, or kill]
-```
-
-## Inputs
-- Product idea (2-3 sentences)
-- Target market
-- Timeline and budget constraints
-- Validation goal / hypothesis
-
-## Outputs
-- Core value proposition (one sentence)
-- Feature triage: IN / OUT / MAYBE with rationale
-- MVP vs V2 scope with trigger conditions for V2 features
-- Tech stack recommendation for fastest build
-- Build estimate with time, cost, and realistic ship date
-- Launch criteria checklist
-- Risk assessment with mitigations and pre-validation steps
+- Including admin dashboards, analytics, or notification systems in MVP
+- Building before pre-validating demand (waitlist, manual delivery, pre-sales)
+- Choosing unfamiliar tech stacks to "do it right from the start"
+- Scoping MVP at > 6 weeks for a solo dev or > 8 weeks for a small team
+- Deferring all risk assessment to post-launch
+- Treating MVP as "version 1 with all features" instead of the smallest testable build
 
 ## Level History
 
-- **Lv.1** — Base: Core value proposition forcing function, ruthless feature triage with cut rationale, MVP/V2/backlog scope boundaries with trigger conditions, speed-optimized tech stack recommendations, build estimates, launch criteria, risk assessment with pre-validation steps. (Origin: MemStack v3.2, Mar 2026)
+- **Lv.1** -- Base: Core value proposition forcing function, ruthless feature triage with cut rationale, MVP/V2/backlog scope boundaries with trigger conditions, speed-optimized tech stack recommendations, build estimates, launch criteria, risk assessment with pre-validation steps. (Origin: MemStack v3.2, Mar 2026)
+- **Lv.2** -- Guide compliance: Added negative triggers, validation gates, Examples, Common Issues, Anti-Patterns. Compressed from 233 to <200 lines. (Origin: MemStack v3.3, Mar 2026)

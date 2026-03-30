@@ -1,31 +1,31 @@
 ---
 name: scan
-description: "Use when the user says 'scan project', 'estimate', 'how much to charge', or needs codebase complexity analysis."
+description: "Use when the user says 'scan project', 'estimate', 'how much to charge', or needs codebase complexity analysis. Do NOT use for code review (use code-reviewer), security audits (use security skills), or performance analysis (use performance-audit)."
 ---
 
 
-# Scan — Analyzing Project Scope
+# Scan -- Analyzing Project Scope
 *Analyze a project's complexity and generate pricing recommendations.*
 
 ## Activation
 
 When this skill activates, output:
 
-`Scan — Analyzing project scope...`
+`Scan -- Analyzing project scope...`
 
-Then execute the protocol below.
+Then execute the instructions below.
 
 ## Context Guard
 
 | Context | Status |
 |---------|--------|
-| **User asks to scan or analyze a project** | ACTIVE — full scan |
-| **User asks about pricing or estimates** | ACTIVE — full scan + pricing |
-| **User mentions project metrics (LOC, file count)** | ACTIVE — quick metrics |
-| **Discussing project analysis concepts generally** | DORMANT — do not activate |
-| **User is building/coding, not analyzing** | DORMANT — do not activate |
+| **User asks to scan or analyze a project** | ACTIVE -- full scan |
+| **User asks about pricing or estimates** | ACTIVE -- full scan + pricing |
+| **User mentions project metrics (LOC, file count)** | ACTIVE -- quick metrics |
+| **Discussing project analysis concepts generally** | DORMANT -- do not activate |
+| **User is building/coding, not analyzing** | DORMANT -- do not activate |
 
-## Protocol
+## Instructions
 
 ### Step 1: Scan the Codebase
 
@@ -34,221 +34,63 @@ find . -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.py" 
 find . -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.js" \) -exec cat {} + | wc -l
 ```
 
-### Step 2: Count Key Components
+Count: pages/routes, API endpoints, database tables, external integrations, auth complexity.
 
-Pages/routes, API endpoints, database tables, external integrations, auth complexity.
+### Step 2: Determine Complexity Tier (Decision Tree)
 
-### Step 3: Determine Complexity Tier (Decision Tree)
+1. Regulatory compliance (HIPAA, SOC2, PCI-DSS)? -> Enterprise
+2. 3+ external integrations or custom infra? -> Complex or Enterprise
+3. Real-time features, event-driven, multi-tenant? -> Complex minimum
+4. Standard CRUD or marketing site? -> Simple or Moderate
+5. File count/LOC as confirming signals: <20 files/<3K LOC = Simple, 20-60/3K-15K = Moderate, 60-150/15K-50K = Complex, 150+/50K+ = Enterprise
 
-Walk through these questions in order to place the project into a tier:
+### Step 3: Calculate Pricing
 
-```
-Q1: Does the project involve regulatory compliance (HIPAA, SOC2, PCI-DSS, GDPR-heavy)?
-    YES --> Enterprise tier (or Complex with compliance adjustment)
+**Formula:** `Base = Hourly Rate x Hours x Complexity Multiplier`
 
-Q2: Are there more than 3 external system integrations or custom infrastructure needs?
-    YES --> Complex or Enterprise depending on scale
+| Tier | Multiplier | Hours | Price Range |
+|------|-----------|-------|-------------|
+| **Simple** | 1x | 20-80 | $2K-$10K |
+| **Moderate** | 1.5x | 80-300 | $10K-$50K |
+| **Complex** | 2-3x | 200-800 | $50K-$150K |
+| **Enterprise** | 3-5x | 500-2000+ | $150K-$500K+ |
 
-Q3: Does it require real-time features, event-driven architecture, or multi-tenant design?
-    YES --> Complex tier minimum
+**Hourly rates** (default US Senior $150-$250/hr): Mid $100-$150, Senior $150-$250, Specialist $250-$400.
 
-Q4: Is it a standard CRUD app or marketing site with known patterns?
-    YES --> Simple or Moderate depending on size
+**Factor adjustments** (additive %): timeline pressure +25-50%, specialized tech +20-40%, compliance +30-50%, ongoing maintenance +15-25%/yr, auth complexity +10-20%, payment processing +10-15%, real-time features +15-25%, admin panel +15-25%, per API integration +$2K-$8K each.
 
-Q5: File count and LOC as confirming signals (not sole determinants):
-    < 20 files, < 3K LOC ........... confirms Simple
-    20-60 files, 3K-15K LOC ........ confirms Moderate
-    60-150 files, 15K-50K LOC ...... confirms Complex
-    150+ files, 50K+ LOC ........... confirms Enterprise
-```
+### Step 4: Generate Three-Tier Pricing
 
-### Step 4: Calculate Pricing
+Present Budget, Standard, and Premium options. Break down hours by component. Include 20% buffer for unknowns.
 
-Use the pricing model defined below.
+### Step 5: Value-Based Alternative
 
-### Step 5: Generate Three-Tier Pricing
+When project has measurable business impact, show value-based pricing (10-20% of estimated Year 1 value) alongside cost-based pricing. Best for: revenue-generating projects, automation replacing manual processes. Avoid for: internal tools with fuzzy ROI, exploratory projects.
 
-Present Budget, Standard, and Premium options within the calculated range.
+## Examples
 
----
+**Full project scan:**
+User: "scan AdminStack and estimate pricing" -> Count files/LOC, identify 6 integrations, classify as Complex, estimate 444 hrs, present 3-tier pricing ($150K/$210K/$275K).
 
-## Pricing Model
+**Quick metrics only:**
+User: "how big is this codebase?" -> Count files and LOC, report component breakdown. Skip pricing unless asked.
 
-### Base Rate Calculation
+## Common Issues
 
-**Formula:** `Base Price = Hourly Rate x Estimated Hours x Complexity Multiplier`
+| Issue | Fix |
+|-------|-----|
+| Tier and price range mismatch | If calculated total exceeds the tier's range, revisit tier assessment -- it may belong in the next tier |
+| Client pushback on pricing | Show the hour breakdown by component so the client sees where time goes |
 
-Hourly rate ranges by market and experience:
+## Anti-Patterns
 
-| Experience Level | US Market | EU Market | Global Remote |
-|-----------------|-----------|-----------|---------------|
-| Mid-level (3-5 yr) | $100-$150/hr | $75-$125/hr | $50-$100/hr |
-| Senior (5-10 yr) | $150-$250/hr | $125-$200/hr | $80-$150/hr |
-| Specialist/Architect | $250-$400/hr | $200-$300/hr | $125-$250/hr |
-
-Default assumption when market is unknown: **US Senior ($150-$250/hr)**.
-
-### Complexity Tiers and Multipliers
-
-| Tier | Multiplier | Typical Hours | Realistic Price Range |
-|------|-----------|---------------|----------------------|
-| **Simple** | 1x | 20-80 hrs | $2,000 - $10,000 |
-| **Moderate** | 1.5x | 80-300 hrs | $10,000 - $50,000 |
-| **Complex** | 2-3x | 200-800 hrs | $50,000 - $150,000 |
-| **Enterprise** | 3-5x | 500-2000+ hrs | $150,000 - $500,000+ |
-
-**What each tier looks like:**
-
-- **Simple:** Landing pages, basic CRUD apps, simple APIs, static sites with a CMS, single-purpose tools. Known patterns, one developer, minimal integrations.
-- **Moderate:** Multi-page apps with auth, dashboard + admin panel, payment integration, 2-3 external APIs, moderate business logic. Small team, 2-4 month timeline.
-- **Complex:** Multi-service architecture, real-time features, complex data pipelines, custom integrations, role-based access, multi-environment deployment. Dedicated team, 4-8 month timeline.
-- **Enterprise:** Multi-tenant SaaS, regulatory compliance, high-availability requirements, complex security model, data migration from legacy systems, multi-region deployment. Cross-functional team, 6-18 month timeline.
-
-### Factor Adjustments
-
-Apply these as additive percentage adjustments to the base price:
-
-| Factor | Adjustment | When to Apply |
-|--------|-----------|---------------|
-| **Timeline pressure** | +25-50% | Deadline is less than 70% of standard timeline for the tier |
-| **Specialized technology** | +20-40% | Blockchain, ML/AI, AR/VR, low-level systems, uncommon stacks |
-| **Compliance requirements** | +30-50% | HIPAA, SOC2, PCI-DSS, FedRAMP, accessibility (WCAG AA+) |
-| **Ongoing maintenance** | +15-25% of project cost annually | Client expects post-launch support, SLAs, or on-call |
-| **Auth complexity** | +10-20% | 2FA, SSO/SAML, OAuth multi-provider, RBAC with complex roles |
-| **Payment processing** | +10-15% | Stripe/payment gateway integration, invoicing, subscriptions |
-| **Real-time features** | +15-25% | WebSockets, live collaboration, streaming, push notifications |
-| **Admin panel** | +15-25% | Back-office dashboard, content management, user management |
-| **Mobile responsive** | +10-20% | Full responsive design beyond basic media queries |
-| **Per API integration** | +$2K-$8K each | Third-party API with auth, error handling, rate limiting, data mapping |
-
-### Pricing Calculator Workflow
-
-Follow this step-by-step to produce a quote:
-
-```
-1. DETERMINE TIER
-   Run the decision tree from Step 3 above.
-
-2. ESTIMATE HOURS
-   Break the project into components. Estimate hours per component.
-   Add 20% buffer for unknowns.
-   Example:
-     Auth system ............. 30 hrs
-     Core CRUD + API ........ 60 hrs
-     Admin panel ............ 40 hrs
-     Payment integration .... 25 hrs
-     Frontend/UI ............ 50 hrs
-     Testing + QA ........... 30 hrs
-     Deployment + DevOps .... 15 hrs
-     Buffer (20%) ........... 50 hrs
-     TOTAL .................. 300 hrs
-
-3. SELECT HOURLY RATE
-   Based on market, experience, and specialization needed.
-   Example: US Senior = $175/hr
-
-4. CALCULATE BASE
-   300 hrs x $175/hr = $52,500
-
-5. APPLY COMPLEXITY MULTIPLIER
-   Moderate tier = 1.5x
-   $52,500 x 1.5 = $78,750
-
-6. APPLY FACTOR ADJUSTMENTS
-   Timeline pressure (tight deadline): +30% = +$23,625
-   Payment processing: +12% = +$9,450
-
-7. CALCULATE TOTAL
-   $78,750 + $23,625 + $9,450 = $111,825
-
-8. BUILD THREE TIERS
-   Budget:   ~$85,000  — Core features, standard delivery, basic styling
-   Standard: ~$112,000 — Full features, polish, admin panel, responsive
-   Premium:  ~$140,000 — Full + custom integrations + 3-month post-launch support
-
-9. SANITY CHECK
-   Does the total fall within the expected range for the tier?
-   Moderate = $10K-$50K, Complex = $50K-$150K
-   $112K sits in Complex range — if the scan said Moderate, revisit
-   the tier assessment. Adjust or explain the overlap.
-```
-
-### Value-Based Pricing (Alternative)
-
-When the project has clear, measurable business impact, consider value-based pricing instead of (or alongside) cost-based pricing:
-
-- **Typical range:** 10-20% of the estimated business value the project creates in Year 1
-- **When to use:** The client can articulate revenue impact, cost savings, or strategic value
-- **Example:** A tool that saves $500K/yr in manual work could be priced at $50K-$100K regardless of hours
-- **How to present it:** Show both the cost-based and value-based price. If value-based is higher, use it as justification for premium pricing. If lower, it signals the project may not be worth building.
-
-**Value-based is strongest when:**
-- Revenue directly attributable to the project (e-commerce, SaaS)
-- Clear cost reduction (automation replacing manual processes)
-- Competitive advantage with quantifiable market impact
-
-**Avoid value-based when:**
-- Internal tools with fuzzy ROI
-- Client cannot articulate business value
-- Exploratory or R&D projects
-
----
-
-## Inputs
-- Project directory path
-- New build vs maintenance estimate
-
-## Outputs
-- Project analysis: file counts, LOC, endpoints, tables
-- Complexity tier assessment with decision-tree reasoning
-- Three-tier pricing recommendation with calculation breakdown
-
-## Example Usage
-
-**User:** "scan AdminStack and estimate pricing"
-
-```
-Scan — Analyzing project scope...
-
-FILES: 127 | LOC: ~28,000 | Pages: 27 | API Routes: 34 | Tables: 20
-Integrations: Supabase, Stripe, Square, SendGrid, Railway, Hetzner
-
-DECISION TREE:
-  Compliance? No
-  3+ integrations? Yes (6 integrations) --> Complex minimum
-  Real-time features? No
-  File/LOC confirms: 60-150 files, 15K-50K LOC --> Complex
-
-TIER: Complex (multiplier: 2x)
-
-HOUR ESTIMATE:
-  Auth + RBAC ............. 35 hrs
-  Core CRUD + API ......... 80 hrs
-  Admin panel ............. 45 hrs
-  Payment (Stripe+Square) . 40 hrs
-  Email (SendGrid) ........ 15 hrs
-  Frontend/UI (27 pages) .. 90 hrs
-  Infrastructure .......... 25 hrs
-  Testing + QA ............ 40 hrs
-  Buffer (20%) ............ 74 hrs
-  TOTAL ................... 444 hrs
-
-BASE: 444 hrs x $185/hr = $82,140
-COMPLEXITY: x 2.0 = $164,280
-ADJUSTMENTS:
-  Payment processing (+12%): +$19,714
-  6 API integrations (6 x $4K): +$24,000
-
-CALCULATED TOTAL: ~$208,000
-
-THREE-TIER PRICING:
-  Budget:   $150,000 — Core features, 4 key integrations, basic admin
-  Standard: $210,000 — All features, all integrations, full admin, responsive
-  Premium:  $275,000 — Full build + 6-month support + priority SLA
-```
+- Using file count/LOC as the sole tier determinant -- architecture complexity matters more than size
+- Skipping the decision tree and jumping straight to LOC-based classification
+- Presenting a single price instead of three tiers -- always give Budget/Standard/Premium
+- Forgetting the 20% buffer for unknowns in hour estimates
 
 ## Level History
 
-- **Lv.1** — Base: File/LOC counting with complexity assessment.
-- **Lv.2** — Enhanced: Added YAML frontmatter, context guard, activation message, integration pricing.
-- **Lv.3** — Pricing overhaul: Decision-tree tier placement, base rate calculation with market-adjusted hourly rates, complexity multipliers, factor adjustments, value-based pricing option, pricing calculator workflow.
+- **Lv.1** -- Base: File/LOC counting with complexity assessment.
+- **Lv.2** -- Enhanced: Context guard, activation message, integration pricing.
+- **Lv.3** -- Pricing overhaul: Decision-tree tier placement, market-adjusted rates, complexity multipliers, factor adjustments, value-based pricing, calculator workflow.

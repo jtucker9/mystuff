@@ -1,27 +1,27 @@
 ---
 name: feature-spec
-description: "Use when the user says 'feature spec', 'spec this feature', 'write a spec', 'functional spec', 'technical spec', or needs a detailed specification for a single feature an engineer can implement without ambiguity."
+description: "Use when the user says 'feature spec', 'spec this feature', 'write a spec', 'functional spec', 'technical spec', or needs a detailed specification for a single feature an engineer can implement without ambiguity. Do NOT use for full product PRDs (see prd-writer), user story backlogs (see user-story-generator), or high-level roadmap planning (see roadmap-builder)."
 ---
 
+# Feature Spec -- Detailed Feature Specification
 
-# 📐 Feature Spec — Detailed Feature Specification
 *Write an unambiguous spec for a single feature covering flows, edge cases, APIs, and acceptance criteria.*
 
 ## Activation
 
 When this skill activates, output:
 
-`📐 Feature Spec — Writing your feature specification...`
+`Feature Spec -- Writing your feature specification...`
 
 | Context | Status |
 |---------|--------|
 | **User says "feature spec", "spec this feature", "write a spec"** | ACTIVE |
 | **User needs a detailed specification for ONE feature** | ACTIVE |
 | **User mentions functional requirements + edge cases + acceptance criteria** | ACTIVE |
-| **User wants a full product PRD (multiple features)** | DORMANT — see prd-writer |
-| **User wants user stories only (no technical detail)** | DORMANT — see user-story-generator |
+| **User wants a full product PRD (multiple features)** | DORMANT -- see prd-writer |
+| **User wants user stories only (no technical detail)** | DORMANT -- see user-story-generator |
 
-## Protocol
+## Instructions
 
 ### Step 1: Gather Inputs
 
@@ -32,236 +32,94 @@ Ask the user for:
 - **Priority**: Must Have / Should Have / Could Have
 - **Context**: Any existing specs, designs, or constraints
 
+**Gate**: Do not proceed until feature name, user story, and priority are provided.
+
 ### Step 2: Functional Requirements
 
-Define what the feature does:
-
-**Overview:**
-- One-paragraph description of the feature's purpose and behavior
-
-**Detailed Requirements:**
+Write an overview paragraph, then a requirements table:
 
 | ID | Requirement | Details |
 |----|-------------|---------|
-| FR-01 | [requirement name] | [precise description of behavior] |
-| FR-02 | [requirement name] | [precise description of behavior] |
-| FR-03 | [requirement name] | [precise description of behavior] |
+| FR-01 | [name] | [precise behavior -- "shall", "must", "when X then Y"] |
 
-Rules for writing functional requirements:
-- Each requirement is independently testable
-- Use precise language: "shall", "must", "when X then Y"
-- Avoid ambiguity: no "appropriate", "user-friendly", "fast"
-- Include default values and boundary conditions
+Rules: each requirement independently testable; no "appropriate" or "user-friendly"; include defaults and boundaries.
 
 ### Step 3: Non-Functional Requirements
 
-**Performance:**
-- Response time targets (e.g., "page loads in < 2s on 3G")
-- Throughput requirements (e.g., "handles 100 concurrent users")
-- Data volume limits (e.g., "supports up to 10,000 records per query")
+Cover four areas in bullet form:
+- **Performance**: response time targets, throughput, data volume limits
+- **Security**: auth, encryption, input validation, rate limiting
+- **Accessibility**: WCAG level, keyboard nav, screen reader, contrast
+- **Compatibility**: browser matrix, mobile, API versioning
 
-**Security:**
-- Authentication/authorization requirements
-- Data encryption needs (at rest, in transit)
-- Input validation and sanitization rules
-- Rate limiting requirements
-
-**Accessibility:**
-- WCAG compliance level (A, AA, AAA)
-- Keyboard navigation requirements
-- Screen reader compatibility
-- Color contrast minimums
-
-**Compatibility:**
-- Browser support matrix
-- Mobile responsiveness requirements
-- API versioning strategy
+**Gate**: If any NFR is unknown, mark it "[TBD -- needs stakeholder input]" rather than omitting.
 
 ### Step 4: User Flow
 
-Map the step-by-step interaction:
+Map step-by-step: User [action] -> System [response] -> UI [what user sees]. Include entry points, happy path, alternative paths, exit points.
 
-```
-Step 1: User [action]
-  → System [response]
-  → UI shows [what the user sees]
-
-Step 2: User [action]
-  → System [validation/processing]
-  → If success: [result]
-  → If failure: [error handling]
-
-Step 3: User [action]
-  → System [final processing]
-  → UI shows [confirmation/result]
-```
-
-Include:
-- Entry points (how does the user get to this feature?)
-- Happy path (ideal flow)
-- Alternative paths (other valid flows)
-- Exit points (where does the user go after?)
-
-### Step 5: Edge Cases & Error States
+### Step 5: Edge Cases and Error States
 
 | Scenario | Trigger | Expected Behavior | Error Message |
 |----------|---------|-------------------|---------------|
-| Empty input | User submits blank form | Inline validation, prevent submit | "This field is required" |
-| Invalid data | User enters wrong format | Highlight field, show format hint | "[Field] must be [format]" |
-| Duplicate | User creates existing item | Block creation, show existing item | "[Item] already exists" |
-| Network failure | Connection lost mid-action | Retry with backoff, show status | "Connection lost. Retrying..." |
-| Timeout | Server takes > Xs | Cancel request, offer retry | "Request timed out. Try again." |
-| Permission denied | Unauthorized access attempt | Redirect to appropriate view | "You don't have access to this" |
-| Concurrent edit | Two users edit same resource | Last-write-wins or merge conflict | "This was updated. Reload?" |
-| Data limit | User exceeds quota/limit | Prevent action, show limit info | "Limit reached: [X] of [max]" |
+| Empty input | Blank form submit | Inline validation | "This field is required" |
+| Duplicate | Existing item | Block creation | "[Item] already exists" |
+| Network failure | Connection lost | Retry with backoff | "Connection lost. Retrying..." |
+| Permission denied | Unauthorized | Redirect | "You don't have access" |
+| Concurrent edit | Two users edit | Last-write-wins or merge | "Updated. Reload?" |
+
+Add rows for each feature-specific edge case.
 
 ### Step 6: API Requirements (if applicable)
 
-For each endpoint:
+For each endpoint define: method, path, purpose, auth, rate limit, request body with types/constraints, success response, error responses (400/401/404/429).
 
-```
-── ENDPOINT: [Method] /api/v1/[resource] ──
-
-Purpose: [what this endpoint does]
-Auth: [required auth level]
-Rate limit: [requests per minute]
-
-Request:
-  Headers:
-    Authorization: Bearer {token}
-    Content-Type: application/json
-
-  Body:
-    {
-      "field1": "string (required, max 255 chars)",
-      "field2": "number (optional, default: 0)",
-      "field3": "enum: [value1, value2, value3]"
-    }
-
-Response (200):
-    {
-      "id": "string",
-      "field1": "string",
-      "created_at": "ISO 8601 datetime"
-    }
-
-Error Responses:
-    400: { "error": "validation_error", "details": [...] }
-    401: { "error": "unauthorized" }
-    404: { "error": "not_found" }
-    429: { "error": "rate_limit_exceeded", "retry_after": 60 }
-```
+**Gate**: Every field in the request body must specify type, required/optional, and constraints.
 
 ### Step 7: Database Changes
 
-**New Tables:**
-
-```sql
-CREATE TABLE [table_name] (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  [column]    [type] [constraints],
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-```
-
-**Schema Changes to Existing Tables:**
-
-| Table | Change | Column | Type | Notes |
-|-------|--------|--------|------|-------|
-| [table] | ADD | [column] | [type] | [nullable? default? index?] |
-| [table] | MODIFY | [column] | [new type] | [migration strategy] |
-
-**Indexes:**
-- [index name]: [columns] — [justification]
-
-**Migration Notes:**
-- Backward compatibility considerations
-- Data backfill requirements
-- Rollback strategy
+Define new tables (columns, types, constraints), schema changes to existing tables, indexes with justification, and migration/rollback notes.
 
 ### Step 8: Acceptance Criteria
 
-Write testable acceptance criteria in Given/When/Then format:
+Write Given/When/Then for every happy path, edge case, error state, and NFR target:
 
 ```
-AC-01: [Criterion name]
-  Given [precondition]
-  When [action]
-  Then [expected result]
-  And [additional verification]
-
-AC-02: [Criterion name]
-  Given [precondition]
-  When [action]
-  Then [expected result]
-
-AC-03: [Criterion name]
-  Given [precondition with edge case]
-  When [action]
-  Then [expected handling]
+AC-01: Given [precondition], When [action], Then [result]
 ```
 
-Checklist for completeness:
-- [ ] Happy path covered
-- [ ] Each edge case has an acceptance criterion
-- [ ] Error states have acceptance criteria
-- [ ] Performance requirements have acceptance criteria
-- [ ] Security requirements have acceptance criteria
+**Gate**: Verify checklist -- happy path covered, each edge case has AC, error states have AC, performance targets have AC.
 
-### Step 9: Output
+### Step 9: Assemble Output
 
-Present the complete feature spec:
+Present complete spec with sections: User Story, Functional Requirements, Non-Functional Requirements, User Flow, Edge Cases, API Requirements, Database Changes, Acceptance Criteria.
 
-```
-━━━ FEATURE SPECIFICATION ━━━━━━━━━━━━━━━━━
-Feature: [name]
-Product: [parent product]
-Priority: [MoSCoW level]
-Author: [name]
-Date: [date]
+## Examples
 
-── 1. USER STORY ──────────────────────────
-As a [user], I want [action] so that [benefit].
+**Example 1 -- API feature**:
+User: "Spec the bulk CSV import for our contacts module"
+Output: FR table with upload limits (50MB, 100k rows), validation rules per column, async processing flow, progress polling endpoint, error report download endpoint, 6 edge cases, 8 acceptance criteria.
 
-── 2. FUNCTIONAL REQUIREMENTS ─────────────
-[requirements table]
+**Example 2 -- UI feature**:
+User: "Spec the inline editing for the task board"
+Output: FR table covering click-to-edit, escape-to-cancel, blur-to-save, optimistic UI update, conflict detection flow, 5 edge cases (concurrent edit, network loss, empty value, max length, special characters), no API section needed.
 
-── 3. NON-FUNCTIONAL REQUIREMENTS ─────────
-[performance, security, accessibility, compatibility]
+## Common Issues
 
-── 4. USER FLOW ───────────────────────────
-[step-by-step interaction map]
+- **Vague requirements slip through**: Replace any "should be fast" with a measurable target ("< 200ms p95"). If the user cannot specify, mark as "[TBD]" and flag in open questions.
+- **Missing error states**: Walk through the flow asking "what if this fails?" at each step. Every system call needs a failure path.
+- **Scope creep into PRD territory**: If the user starts describing multiple features, stop and recommend prd-writer. One feature per spec.
 
-── 5. EDGE CASES & ERRORS ─────────────────
-[edge case table]
+## Anti-Patterns
 
-── 6. API REQUIREMENTS ────────────────────
-[endpoint definitions]
-
-── 7. DATABASE CHANGES ────────────────────
-[schema changes, migrations]
-
-── 8. ACCEPTANCE CRITERIA ─────────────────
-[Given/When/Then test cases]
-```
-
-## Inputs
-- Feature name
-- Parent product name
-- User story (As a/I want/So that)
-- Priority level
-- Existing designs, specs, or constraints (optional)
-
-## Outputs
-- Functional requirements table with precise descriptions
-- Non-functional requirements (performance, security, accessibility)
-- Step-by-step user flow with happy and alternative paths
-- Edge case and error state matrix
-- API endpoint definitions with request/response schemas
-- Database schema changes with migration notes
-- Acceptance criteria in Given/When/Then format
+- Writing requirements that cannot be independently tested
+- Using subjective language ("intuitive", "user-friendly", "fast")
+- Omitting database migration rollback strategy
+- Defining API endpoints without error response schemas
+- Skipping accessibility requirements for UI features
+- Combining multiple features into one spec document
 
 ## Level History
 
-- **Lv.1** — Base: Complete feature specification with functional/non-functional requirements, user flow mapping, edge case matrix, API endpoint definitions, database schema changes, Given/When/Then acceptance criteria. Zero-ambiguity engineering handoff format. (Origin: MemStack v3.2, Mar 2026)
+- **Lv.1** -- Base: Complete feature specification with functional/non-functional requirements, user flow mapping, edge case matrix, API endpoint definitions, database schema changes, Given/When/Then acceptance criteria. Zero-ambiguity engineering handoff format. (Origin: MemStack v3.2, Mar 2026)
+- **Lv.2** -- Guide compliance: Added negative triggers, validation gates, Examples, Common Issues, Anti-Patterns. Compressed from 267 to <200 lines. (Origin: MemStack v3.3, Mar 2026)

@@ -1,70 +1,44 @@
 ---
 name: diary
-description: "Use when the user says 'save diary', 'log session', 'wrapping up', or at end of a productive session."
+description: "Use when the user says 'save diary', 'log session', 'wrapping up', or at end of a productive session. Do NOT use for recalling past sessions (use Echo), saving project state (use Project), or mid-task logging."
 ---
 
 
-# 📓 Diary — Logging Session...
+# Diary -- Logging Session
 *Document what was accomplished in each CC session for future recall.*
 
 ## Activation
 
 When this skill activates, output:
 
-`📓 Diary — Logging session...`
+`Diary -- Logging session...`
 
-Then execute the protocol below.
+Then execute the instructions below.
 
 ## Context Guard
 
-| Context | Status | Priority |
-|---------|--------|----------|
-| **User says "save diary", "log session", "write diary"** | ACTIVE — write diary | P1 |
-| **User explicitly says they're done ("that's it", "wrapping up")** | ACTIVE — suggest diary if work was done | P2 |
-| **Mid-session, user is actively coding** | DORMANT — don't interrupt flow | — |
-| **Casual conversation, no code changes made** | DORMANT — nothing to log | — |
-| **User asks to recall past sessions ("what did we do")** | DORMANT — Echo handles recall, not Diary | — |
-| **User says "save project" or "handoff"** | DORMANT — Project skill handles this | — |
-| **Session just started, no work yet** | DORMANT — nothing to log | — |
+| Context | Status |
+|---------|--------|
+| **User says "save diary", "log session", "write diary"** | ACTIVE -- write diary |
+| **User says "that's it", "wrapping up"** | ACTIVE -- suggest diary if work was done |
+| **Mid-session, user is actively coding** | DORMANT -- don't interrupt flow |
+| **Casual conversation, no code changes made** | DORMANT -- nothing to log |
+| **User asks to recall past sessions ("what did we do")** | DORMANT -- Echo handles recall |
+| **Session just started, no work yet** | DORMANT -- nothing to log |
 
-## Anti-Rationalization
+## Instructions
 
-If you're thinking any of these, STOP — you're about to skip the protocol:
+1. **Summarize the session:** project name, date, what was built/changed, key files modified, commits made (check `git log --oneline -10`), decisions and rationale, problems and solutions.
 
-| You're thinking... | Reality |
-|---|---|
-| "Nothing important happened this session" | Every session has decisions, even small ones. Log them. |
-| "I'll remember this for next time" | You won't. You don't persist. The database does. Write the diary. |
-| "The user didn't ask me to log this" | The rule says log at session end. You don't need explicit permission. |
-| "This was just a quick fix, not worth logging" | Quick fixes contain decisions ("why this approach?"). Future you needs that context. |
-| "I already committed, so the work is saved" | Commits don't capture decisions, blockers, or next steps. The diary does. |
-| "The Session Handoff section isn't needed" | Handoffs are the most valuable part. Always include in-progress work and pickup instructions. |
-
-## Protocol
-
-1. **Summarize the session:**
-   - Project name and working directory
-   - Date and approximate duration
-   - What was built or changed
-   - Key files created or modified
-   - Commits made (hashes and messages)
-   - Decisions made and why
-   - Problems encountered and solutions
-
-2. **Check git log** for commits:
-   ```bash
-   git log --oneline -10
-   ```
-
-3. **Format the diary entry:**
+2. **Format the diary entry:**
    ```markdown
-   # Session Diary — {project} — {date}
+   # Session Diary -- {project} -- {date}
 
    ## Accomplished
    - Item 1...
 
    ## Files Changed
-   - path/to/file.ts — description
+   - path/to/file.ts -- description
 
    ## Commits
    - abc1234 Message
@@ -76,78 +50,50 @@ If you're thinking any of these, STOP — you're about to skip the protocol:
    - What to do next
 
    ## Session Handoff
-   **In Progress:** [what was actively being worked on when session ended]
-   **Uncommitted Changes:** [list any unstaged/uncommitted work, or "None"]
-   **Pick Up Here:** [exact instruction for next session — specific enough to start cold]
-   **Session Context:** [anything important that isn't captured elsewhere — temp decisions, debugging state, gotchas discovered]
+   **In Progress:** [what was actively being worked on]
+   **Uncommitted Changes:** [list any unstaged work, or "None"]
+   **Pick Up Here:** [exact instruction for next session]
+   **Session Context:** [anything important not captured elsewhere]
    ```
 
-4. **Save to SQLite database** (primary storage):
+3. **Save to SQLite** (primary storage):
    ```bash
-   python C:/Projects/memstack/db/memstack-db.py add-session '{"project":"<name>","date":"<YYYY-MM-DD>","accomplished":"<bullets>","files_changed":"<bullets>","commits":"<bullets>","decisions":"<bullets>","problems":"<bullets>","next_steps":"<bullets>","duration":"<estimate>","raw_markdown":"<full text>"}'
+   python C:/Projects/memstack/db/memstack-db.py add-session '{"project":"<name>","date":"<YYYY-MM-DD>","accomplished":"<bullets>","files_changed":"<bullets>","commits":"<bullets>","decisions":"<bullets>","next_steps":"<bullets>"}'
    ```
 
-5. **Also save decisions as insights** for cross-project search:
+4. **Save decisions as insights** for cross-project search:
    ```bash
-   python C:/Projects/memstack/db/memstack-db.py add-insight '{"project":"<name>","type":"decision","content":"<decision>","context":"Session <date>","tags":"<project>"}'
+   python C:/Projects/memstack/db/memstack-db.py add-insight '{"project":"<name>","type":"decision","content":"<decision>","context":"Session <date>"}'
    ```
 
-6. **Update project context** with last session date:
-   ```bash
-   python C:/Projects/memstack/db/memstack-db.py set-context '{"project":"<name>","last_session_date":"<YYYY-MM-DD>"}'
-   ```
+5. **Save markdown backup** to `memory/sessions/{date}-{project}.md`
 
-7. **Also save markdown copy** to `memory/sessions/{date}-{project}.md` (export format, human-readable backup)
+## Examples
 
-## Session File Size Management
+**Standard diary save:**
+User: "save diary" -> Summarize accomplishments, check git log, save to SQLite + markdown, confirm with project/duration/commit count.
 
-The 500-line limit on markdown files is no longer a concern since SQLite is the source of truth.
-Markdown files in `memory/sessions/` are now just human-readable exports.
-Old markdown files are preserved but not the primary storage.
+**End-of-session prompt:**
+User: "that's it for today" -> Offer to save diary. If accepted, run full protocol including Session Handoff section.
 
-## Inputs
-- Current session context
-- Project name from working directory or config.json
-- Git log for commit history
+## Common Issues
 
-## Outputs
-- Session entry in SQLite database
-- Insights extracted from decisions
-- Markdown backup in memory/sessions/
-- Brief confirmation summary
+| Issue | Fix |
+|-------|-----|
+| memstack-db.py not found or errors | Verify Python path and that `memstack.db` exists at expected location |
+| Session Handoff section missing | Always include it -- it is the most valuable part for cold-start resumption |
 
-## Example Usage
+## Anti-Patterns
 
-**User:** "save diary"
-
-```
-📓 Diary — Logging session...
-
-Saved: memory/sessions/2026-02-18-adminstack.md
-
-Project: AdminStack | Duration: ~2 hours
-Accomplished: Built CC Monitor page, API routes, setup guide
-Commits: 4 (45b4c42, d1c7e11, f6c8e18, f0e793f)
-Files changed: 8
-
-This session is now searchable via Echo.
-```
+- Activating mid-task when user is still working -- wait until they signal completion
+- Skipping the Session Handoff section because "nothing is in progress" -- always include it even if empty
+- Logging a session where nothing happened -- no commits and no decisions means nothing to log
+- Using Echo's recall protocol instead of writing -- Diary writes, Echo reads
 
 ## Level History
 
-- **Lv.1** — Base: Session logging with git integration. (Origin: MemStack v1.0, Feb 2026)
-- **Lv.2** — Enhanced: Added YAML frontmatter, context guard, 500-line limit with archive, activation message. (Origin: MemStack v2.0 MemoryCore merge, Feb 2026)
-- **Lv.3** — Advanced: SQLite as primary storage, auto-extract insights from decisions, markdown as backup export. (Origin: MemStack v2.1 Accomplish-inspired upgrade, Feb 2026)
-- **Lv.4** — Native: CC rules integration (`.claude/rules/diary.md`), always-on session logging awareness without skill file read. (Origin: MemStack v3.0-beta, Feb 2026)
-- **Lv.5** — Handoff: Added structured Session Handoff section — in-progress work, uncommitted changes, exact pickup instructions, session context preservation. (Origin: MemStack v3.1, Feb 2026)
-
-## Pro Features: Automatic Hook System
-
-MemStack™ Pro includes 3 automatic hooks that fire without any user trigger:
-- **PreCompact** — auto-saves diary before context compaction
-- **PostToolUse** — captures an observation log entry after every file write and bash command
-- **SessionStart** — injects a context summary from your last 3 sessions at startup
-
-Free version requires manual diary saves only.
-
-Upgrade: memstack.pro
+- **Lv.1** -- Base: Session logging with git integration. (Origin: MemStack v1.0, Feb 2026)
+- **Lv.2** -- Enhanced: Context guard, 500-line limit with archive. (Origin: MemStack v2.0, Feb 2026)
+- **Lv.3** -- Advanced: SQLite as primary storage, auto-extract insights. (Origin: MemStack v2.1, Feb 2026)
+- **Lv.4** -- Native: CC rules integration (`.claude/rules/diary.md`). (Origin: MemStack v3.0-beta, Feb 2026)
+- **Lv.5** -- Handoff: Structured Session Handoff section for cold-start resumption. (Origin: MemStack v3.1, Feb 2026)

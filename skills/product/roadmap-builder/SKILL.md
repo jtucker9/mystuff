@@ -1,239 +1,101 @@
 ---
 name: roadmap-builder
-description: "Use when the user says 'roadmap', 'product roadmap', 'feature roadmap', 'quarterly plan', 'now next later', or needs to plan product development across a time horizon."
+description: "Use when the user says 'roadmap', 'product roadmap', 'feature roadmap', 'quarterly plan', 'now next later', or needs to plan product development across a time horizon. Do NOT use for MVP scoping (see mvp-scoper), sprint-level story planning (see user-story-generator), or project task management (see work skill)."
 ---
 
+# Roadmap Builder -- Strategic Product Roadmap
 
-# 🗺️ Roadmap Builder — Strategic Product Roadmap
 *Create a now/next/later roadmap with quarterly milestones, resource allocation, and stakeholder-ready presentation.*
 
 ## Activation
 
 When this skill activates, output:
 
-`🗺️ Roadmap Builder — Planning your product roadmap...`
+`Roadmap Builder -- Planning your product roadmap...`
 
 | Context | Status |
 |---------|--------|
 | **User says "roadmap", "product roadmap", "quarterly plan"** | ACTIVE |
 | **User wants to plan features across a time horizon** | ACTIVE |
 | **User mentions now/next/later or OKRs for product** | ACTIVE |
-| **User wants to scope just the MVP** | DORMANT — see mvp-scoper |
-| **User wants sprint-level task planning** | DORMANT — see user-story-generator |
-| **User wants project task management** | DORMANT — see work skill |
+| **User wants to scope just the MVP** | DORMANT -- see mvp-scoper |
+| **User wants sprint-level task planning** | DORMANT -- see user-story-generator |
+| **User wants project task management** | DORMANT -- see work skill |
 
-## Protocol
+## Instructions
 
 ### Step 1: Gather Inputs
 
 Ask the user for:
-- **Product vision**: Where is this product going in 12-18 months?
-- **Current state**: What exists today? What stage? (MVP, growth, mature)
+- **Product vision**: Where is this going in 12-18 months?
+- **Current state**: What exists? What stage? (MVP, growth, mature)
 - **Team capacity**: How many engineers/designers? Full-time or part-time?
-- **Time horizon**: 3 months, 6 months, or 12 months?
-- **Key constraints**: Technical debt, platform migrations, compliance deadlines?
-- **Stakeholder priorities**: What does leadership/board care most about?
+- **Time horizon**: 3, 6, or 12 months?
+- **Key constraints**: Tech debt, migrations, compliance deadlines?
+- **Stakeholder priorities**: What does leadership care most about?
 
-### Step 2: Define Themes/Pillars
+**Gate**: Must have product vision, current state, and team capacity before proceeding.
 
-Organize the roadmap around 3-5 strategic themes:
+### Step 2: Define Themes
 
-| Theme | Description | Strategic Goal |
-|-------|-------------|---------------|
-| **Growth** | Features that acquire new users | Increase MAU by X% |
-| **Retention** | Features that keep users coming back | Reduce churn to X% |
-| **Revenue** | Features that drive monetization | Reach $X MRR |
-| **Platform** | Infrastructure, performance, tech debt | Reduce deploy time to X |
-| **Expansion** | New markets, integrations, partnerships | Launch in X market |
-
-Each theme should tie directly to a business metric. No theme exists "because it's interesting."
+Organize around 3-5 strategic themes (Growth, Retention, Revenue, Platform, Expansion). Each theme ties to a business metric. No theme exists "because it's interesting."
 
 ### Step 3: Map Features to Themes
 
-For each proposed feature:
+Score each feature: Impact (1-5) x Confidence (1-5) / Effort (1-5, inverted where 5=trivial). Rank by score. Top items go to "Now."
 
-| Feature | Theme | Impact | Effort | Priority Score |
-|---------|-------|--------|--------|---------------|
-| [feature] | Growth | High | Medium | 8/10 |
-| [feature] | Retention | Medium | Low | 7/10 |
-| [feature] | Revenue | High | High | 6/10 |
-| [feature] | Platform | Low | High | 3/10 |
-
-**Priority scoring formula:**
-- Impact (1-5): How much does this move the theme's metric?
-- Confidence (1-5): How sure are we this will work?
-- Effort (1-5, inverted): How easy is it to build? (5 = trivial)
-- Score = (Impact × Confidence) / Effort
-
-Rank by score. Top items go to "Now."
+**Gate**: Every feature must map to exactly one theme. Orphan features indicate a missing theme or a feature that should not exist.
 
 ### Step 4: Quarterly Milestones
 
-Break the time horizon into quarters with concrete deliverables:
+Break into quarters with objective, key result, deliverables (feature, owner, est. weeks), and milestone statement. Rule: Q1 is detailed, Q2 is planned, Q3+ is directional. Do not fake precision for the future.
 
-```
-━━━ Q1: [Quarter Name/Theme] ━━━━━━━━━━━━━
-Objective: [what we aim to achieve]
-Key Result: [measurable outcome]
+### Step 5: Dependencies and Sequencing
 
-Deliverables:
-  • [Feature A] — [owner] — [est. weeks]
-  • [Feature B] — [owner] — [est. weeks]
-  • [Infrastructure work] — [owner] — [est. weeks]
-
-Milestone: By end of Q1, [concrete achievement].
-
-━━━ Q2: [Quarter Name/Theme] ━━━━━━━━━━━━━
-Objective: [what we aim to achieve]
-Key Result: [measurable outcome]
-
-Deliverables:
-  • [Feature C] — [owner] — [est. weeks]
-  • [Feature D] — [owner] — [est. weeks]
-
-Milestone: By end of Q2, [concrete achievement].
-
-━━━ Q3-Q4: [Horizon Planning] ━━━━━━━━━━━━
-[Less detailed, more directional]
-```
-
-Rule: Q1 is detailed, Q2 is planned, Q3+ is directional. Don't fake precision for the future.
-
-### Step 5: Dependencies & Sequencing
-
-Map what blocks what:
-
-```
-DEPENDENCY GRAPH:
-  [Feature A] ──→ [Feature C] (needs A's data model)
-  [Platform work] ──→ [Feature B] (needs new infra)
-  [Feature D] ──→ [Feature E] (iterates on D's feedback)
-
-CRITICAL PATH:
-  [Platform] → [Feature A] → [Feature C] → [Feature E]
-  Duration: ~[X] weeks
-  Risk: If platform work slips, everything shifts.
-```
-
-Identify the **critical path** — the longest chain of dependent work. This determines your actual timeline.
+Map what blocks what. Identify the critical path -- the longest chain of dependent work. This determines your actual timeline. Flag any feature blocked by more than 2 dependencies.
 
 ### Step 6: Resource Allocation
 
-Map team capacity to milestones:
+Map team capacity to milestones per quarter. Rules: plan to 70-80% capacity, no person on > 2 projects/quarter, design leads engineering by 2-4 weeks, 15-20% capacity reserved for tech debt.
 
-```
-── TEAM ALLOCATION ────────────────────────
+**Gate**: If total estimated effort exceeds 80% capacity for any quarter, cut scope or extend timeline.
 
-Q1:
-  Engineer 1: Feature A (6 weeks) → Feature B (4 weeks)
-  Engineer 2: Platform work (8 weeks) → Bug fixes (2 weeks)
-  Designer:   Feature A design (3 weeks) → Feature C design (3 weeks)
+### Step 7: Risk Flags
 
-Q2:
-  Engineer 1: Feature C (6 weeks) → Feature D (4 weeks)
-  Engineer 2: Feature D (6 weeks) → Tech debt (4 weeks)
-  Designer:   Feature D design (4 weeks) → User research (6 weeks)
-```
+Risk table with probability, impact, contingency. For each high-impact risk, define a trigger (how you will know) and action (what you will do).
 
-**Capacity rules:**
-- Plan to 70-80% capacity (leave room for bugs, support, unexpected work)
-- No person on more than 2 projects per quarter
-- Design should lead engineering by 2-4 weeks
-- Include dedicated time for tech debt (15-20% of capacity)
+### Step 8: Stakeholder View
 
-### Step 7: Risk Flags & Contingencies
+Present Now/Next/Later format: NOW = commitments (do not include anything you might cut), NEXT = plans (scope may change), LATER = direction (explicitly "subject to change", never with dates). Update monthly.
 
-| Risk | Probability | Impact | Contingency |
-|------|------------|--------|-------------|
-| Key engineer leaves | Low | High | Document decisions, cross-train |
-| Scope creep on Feature A | High | Medium | Fixed deadline, cut scope not timeline |
-| Dependency on external API | Medium | High | Build abstraction layer, have fallback |
-| Customer priorities shift | Medium | Medium | Keep Q3+ flexible, re-prioritize quarterly |
-| Technical approach fails | Low | High | Spike/prototype before committing to build |
+### Step 9: Assemble Output
 
-For each high-impact risk, define a **trigger** (how you'll know it's happening) and **action** (what you'll do).
+Dual output: Stakeholder View (Now/Next/Later) + Detailed Plan (quarterly milestones, themes/metrics, dependencies, resource allocation, risks).
 
-### Step 8: Stakeholder Communication Format
+## Examples
 
-Present the roadmap in Now/Next/Later view for non-technical stakeholders:
+**Example 1 -- Growth-stage SaaS**:
+User: "Roadmap for our project management tool, 5 engineers, 6-month horizon." Output: 4 themes (Growth: integrations, Retention: collaboration features, Revenue: enterprise tier, Platform: performance). Q1: Slack integration + real-time cursors. Q2: SSO + audit log + enterprise pricing. Critical path: SSO blocks enterprise tier.
 
-```
-━━━ PRODUCT ROADMAP ━━━━━━━━━━━━━━━━━━━━━━
+**Example 2 -- Post-MVP consumer app**:
+User: "Just launched our fitness app, 2 devs, what next for 3 months?" Output: 3 themes (Retention: streaks + push notifications, Growth: social sharing, Platform: crash fixes). Now: crash fixes + streaks. Next: push notifications. Later: social sharing. One dev on platform, one on features.
 
-🟢 NOW (This Quarter)
-  Committed. In progress or starting soon.
-  ├── [Feature A]: [one-line benefit to users]
-  ├── [Feature B]: [one-line benefit to users]
-  └── [Platform]: [one-line benefit — why it matters]
+## Common Issues
 
-🟡 NEXT (Next Quarter)
-  Planned. High confidence, may shift in scope.
-  ├── [Feature C]: [one-line benefit]
-  ├── [Feature D]: [one-line benefit]
-  └── [Research]: [what we're exploring]
+- **Everything is "Now"**: If > 40% of features are in "Now", the roadmap is a wishlist. Force rank by ICE score and move bottom half to "Next."
+- **No critical path identified**: Without dependencies mapped, the team discovers blockers mid-sprint. Walk through each Q1 feature asking "what must exist before this can start?"
+- **Resource over-allocation**: Planning at 100% capacity guarantees missed deadlines. Bugs, support requests, and sick days are real. Enforce the 70-80% rule.
 
-🔵 LATER (Future)
-  Directional. Subject to change based on learnings.
-  ├── [Feature E]: [one-line vision]
-  ├── [Expansion]: [one-line vision]
-  └── [Big bet]: [one-line vision]
-```
+## Anti-Patterns
 
-**Communication rules:**
-- NOW = commitments (don't include anything you might cut)
-- NEXT = plans (signal that scope might change)
-- LATER = direction (explicitly say "subject to change")
-- Never put dates on LATER items
-- Update this view monthly at minimum
-
-### Step 9: Output
-
-Present both views:
-
-```
-━━━ PRODUCT ROADMAP: [Product Name] ━━━━━━━
-Vision: [one sentence]
-Horizon: [X months]
-Team: [X engineers, X designers]
-
-── STAKEHOLDER VIEW (Now/Next/Later) ──────
-[Now/Next/Later format from Step 8]
-
-── DETAILED QUARTERLY PLAN ────────────────
-Q1: [deliverables, owners, milestones]
-Q2: [deliverables, owners, milestones]
-Q3+: [directional themes]
-
-── THEMES & METRICS ───────────────────────
-[theme table with target metrics]
-
-── DEPENDENCIES ───────────────────────────
-[dependency graph + critical path]
-
-── RESOURCE ALLOCATION ────────────────────
-[team allocation by quarter]
-
-── RISKS ──────────────────────────────────
-[risk table with triggers and contingencies]
-```
-
-## Inputs
-- Product vision (12-18 month)
-- Current state and stage
-- Team capacity
-- Time horizon
-- Key constraints and stakeholder priorities
-
-## Outputs
-- 3-5 strategic themes tied to business metrics
-- Feature-to-theme mapping with priority scores
-- Quarterly milestones with deliverables and owners
-- Dependency graph with critical path identification
-- Resource allocation plan at 70-80% capacity
-- Risk flags with triggers and contingency actions
-- Now/Next/Later stakeholder-ready view
-- Detailed quarterly breakdown
+- Putting dates on "Later" items -- creates false commitments
+- Planning Q3-Q4 with the same detail as Q1
+- Assigning one person to 3+ projects in the same quarter
+- Building a roadmap without stakeholder priority input
+- Skipping the Now/Next/Later stakeholder view and only showing the detailed plan
+- Treating the roadmap as fixed rather than a living document updated monthly
 
 ## Level History
 
-- **Lv.1** — Base: Theme-driven roadmap with ICE priority scoring, quarterly milestone planning, dependency graphing with critical path, resource allocation at 70-80% capacity, Now/Next/Later stakeholder format, risk flags with triggers and contingencies. Dual output: stakeholder view + detailed plan. (Origin: MemStack v3.2, Mar 2026)
+- **Lv.1** -- Base: Theme-driven roadmap with ICE priority scoring, quarterly milestone planning, dependency graphing with critical path, resource allocation at 70-80% capacity, Now/Next/Later stakeholder format, risk flags with triggers and contingencies. Dual output: stakeholder view + detailed plan. (Origin: MemStack v3.2, Mar 2026)
+- **Lv.2** -- Guide compliance: Added negative triggers, validation gates, Examples, Common Issues, Anti-Patterns. Compressed from 239 to <200 lines. (Origin: MemStack v3.3, Mar 2026)

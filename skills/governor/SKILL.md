@@ -1,167 +1,97 @@
 ---
 name: governor
-description: "Use when the user says 'new project', 'project init', 'what tier', 'scope', or discusses project maturity, complexity budget, or what's appropriate to build."
+description: "Use when the user says 'new project', 'project init', 'what tier', 'scope', or discusses project maturity, complexity budget, or what's appropriate to build. Do NOT use for pricing/estimates (use Scan), code review, or mid-task development work."
 ---
 
 
-# 🏛️ Governor — Portfolio Governance
+# Governor -- Portfolio Governance
 
-*Enforce tier-appropriate complexity. Prevent over-engineering the #1 waste of time in AI-assisted development.*
+*Enforce tier-appropriate complexity. Prevent over-engineering.*
 
 ## Activation
 
 When this skill activates, output:
 
-`🏛️ Governor — Checking project tier constraints...`
+`Governor -- Checking project tier constraints...`
 
-Then execute the protocol below.
+Then execute the instructions below.
 
 ## Context Guard
 
-| Context | Status | Priority |
-|---------|--------|----------|
-| **User starts a new project ("new project", "init", "scaffold")** | ACTIVE — assign tier | P1 |
-| **User asks "what tier", "what's allowed", "scope check"** | ACTIVE — report current tier constraints | P1 |
-| **User proposes work that exceeds current tier** | ACTIVE — flag and advise | P2 |
-| **User is executing work within tier constraints** | DORMANT — don't interrupt | — |
-| **User explicitly overrides ("I know, do it anyway")** | DORMANT — user has authority | — |
+| Context | Status |
+|---------|--------|
+| **User starts a new project ("new project", "init", "scaffold")** | ACTIVE -- assign tier |
+| **User asks "what tier", "what's allowed", "scope check"** | ACTIVE -- report constraints |
+| **User proposes work that exceeds current tier** | ACTIVE -- flag and advise |
+| **User is executing work within tier constraints** | DORMANT -- don't interrupt |
+| **User explicitly overrides ("I know, do it anyway")** | DORMANT -- user has authority |
 
-## Anti-Rationalization
-
-If you're thinking any of these, STOP — you're about to let scope creep happen:
-
-| You're thinking... | Reality |
-|---|---|
-| "Adding tests is always good practice" | Not for prototypes. Tests for throwaway code waste time. |
-| "This needs proper auth" | Single-user tools don't need auth. Add it when there are users. |
-| "Let me add CI/CD while I'm at it" | CI/CD for a prototype is gold-plating. Ship first. |
-| "Error handling should be comprehensive" | Prototype error handling = crash and log. That's it. |
-| "I should add monitoring" | < 10 users? Console.log is your monitoring. |
-| "This should be configurable" | Hardcode it. Make it configurable when someone asks. |
-
-## Protocol
+## Instructions
 
 ### Step 1: Determine Project Tier
 
-Ask or infer the project tier from context:
-
-| Tier | Description | Effort Allocation |
-|------|-------------|-------------------|
-| **Prototype** | Exploring an idea. May be thrown away. | Minimal — working code only |
-| **MVP** | Validated idea, building for first users. | Moderate — basic quality gates |
-| **Production** | Serving real users, needs reliability. | Full — complete quality stack |
+| Tier | Description | Effort |
+|------|-------------|--------|
+| **Prototype** | Exploring an idea. May be thrown away. | Minimal -- working code only |
+| **MVP** | Validated idea, building for first users. | Moderate -- basic quality gates |
+| **Production** | Serving real users, needs reliability. | Full -- complete quality stack |
 
 If tier is unclear, default to **Prototype** and escalate only when evidence suggests otherwise.
 
 ### Step 2: Apply Tier Constraints
 
-#### Prototype — Move Fast, Break Things
+**Prototype -- Move Fast:** Working code only. Hardcoded config, console.log debugging, single-file scripts. No tests, CI/CD, auth, monitoring, or infra-as-code.
 
-| Allowed | NOT Allowed |
-|---------|-------------|
-| Working code that demonstrates the idea | Unit tests |
-| Hardcoded config values | CI/CD pipelines |
-| Console.log for debugging | Type systems / strict typing |
-| Single-file scripts | Monitoring / alerting |
-| README with setup instructions | Authentication / authorization |
-| | Infrastructure-as-code |
-| | Rate limiting |
-| | Database migrations (use SQLite) |
+**MVP -- Prove It Works:** Add happy-path unit tests, simple error handling, env vars for config, basic input validation, simple auth if multi-user. No integration test suites, multi-environment deploys, performance optimization, or horizontal scaling.
 
-**Prototype rule:** If it works in a demo, ship it.
-
-#### MVP — Prove It Works
-
-| Allowed | NOT Allowed |
-|---------|-------------|
-| Everything from Prototype, plus: | Integration test suites |
-| Basic unit tests (happy path only) | Full CI/CD with staging |
-| Simple error handling (try/catch at boundaries) | Monitoring dashboards |
-| Environment variables for config | Multi-environment deploys |
-| Basic input validation | Performance optimization |
-| Simple auth (if multi-user) | Horizontal scaling |
-| README + basic API docs | Comprehensive logging |
-
-**MVP rule:** If the first 10 users can use it reliably, ship it.
-
-#### Production — Reliability Matters
-
-| Allowed | Required |
-|---------|----------|
-| Everything from MVP, plus: | Comprehensive tests (unit + integration) |
-| Performance optimization | CI/CD pipeline |
-| Monitoring and alerting | Error tracking (Sentry or equivalent) |
-| Multi-environment deployment | Input validation at all boundaries |
-| Horizontal scaling | Authentication + authorization |
-| Database migrations | Logging with structured output |
-| Rate limiting | API documentation |
-
-**Production rule:** If it breaks at 3 AM, someone gets paged.
+**Production -- Reliability Matters:** Comprehensive tests, CI/CD, error tracking (Sentry or equivalent), input validation at all boundaries, auth + authz, structured logging, API docs. All required.
 
 ### Step 3: Report Constraints
 
-Output a brief summary:
-
 ```
-🏛️ Project: {name}
+Governor -- Project: {name}
    Tier: {Prototype | MVP | Production}
    Allowed: {brief list}
-   NOT allowed: {brief list of key restrictions}
+   NOT allowed: {brief list}
 ```
 
 ### Step 4: Flag Violations
 
-When the user proposes work that exceeds the tier, flag it:
-
+When user proposes work exceeding the tier:
 ```
-🏛️ Governor — Scope check:
+Governor -- Scope check:
    You're proposing {X}, but this is a {Tier} project.
-   {X} is a {higher tier} concern. Current tier doesn't require it.
-   Want to proceed anyway, or skip it for now?
+   {X} is a {higher tier} concern. Want to proceed anyway?
 ```
 
-Always defer to the user if they override. Governor advises, doesn't block.
+Always defer to the user if they override.
 
-## Anti-Patterns by Tier
+## Examples
 
-### Prototype Anti-Patterns — DON'T DO THIS
+**New project init:**
+User: "starting a new tool to parse CSV files" -> Assign Prototype tier. Report: no tests, no auth, hardcode paths. Ship when it works.
 
-1. **Writing tests for throwaway code** — If the prototype proves the idea wrong, those tests are wasted
-2. **Adding auth to single-user tools** — You're the only user. Skip it
-3. **Setting up CI/CD** — You're not deploying to production. `git push` is your CI
-4. **Using TypeScript for a quick script** — JavaScript is fine for prototypes
-5. **Adding rate limiting** — You have 0 users. Rate limit when you have 10
-6. **Creating database migrations** — SQLite + direct schema changes. Migrate when you scale
-7. **Building admin dashboards** — Database GUI tool (TablePlus, DBeaver) is your admin panel
-8. **Over-abstracting** — 3 similar lines > 1 premature abstraction
-9. **Adding comprehensive error handling** — Crash and read the stack trace. That's debugging
-10. **Monitoring and alerting** — Console output is your monitoring
+**Scope creep flag:**
+User: "let me add CI/CD to this prototype" -> Flag: CI/CD is Production-tier. Suggest skipping until there are real users.
 
-### MVP Anti-Patterns — DON'T DO THIS
+## Common Issues
 
-1. **Integration test suites** — Happy-path unit tests are enough at MVP
-2. **Multi-environment deploys** — One environment. Dev IS production
-3. **Performance optimization** — Make it work, make it right, THEN make it fast. You're at step 2
-4. **Horizontal scaling** — Vertical scale (bigger server) until proven insufficient
-5. **Comprehensive logging** — Log errors and key events. Not every function call
+| Issue | Fix |
+|-------|-----|
+| User keeps overriding every flag | Stop flagging for that session -- they have made a conscious choice |
+| Unclear whether project is MVP or Production | Check: are there real external users today? No = MVP. Yes = Production |
 
-### Production Anti-Patterns — DON'T DO THIS
+## Anti-Patterns
 
-1. **Skipping tests to "move faster"** — You'll move slower when bugs hit production
-2. **Manual deployments** — CI/CD exists for a reason. Set it up
-3. **No error tracking** — If you can't see errors, you can't fix them
-4. **Ignoring security** — Production code faces the internet. Act like it
-
-## Inputs
-- Project name and context
-- Current tier (from user, STATE.md, or project CLAUDE.md)
-- Proposed work scope
-
-## Outputs
-- Tier assignment with constraint summary
-- Violation flags when scope exceeds tier
-- Anti-pattern warnings
+- Writing tests for throwaway prototype code
+- Adding auth to single-user tools
+- Setting up CI/CD for a prototype (`git push` is your CI)
+- Using TypeScript for a quick script -- JavaScript is fine for prototypes
+- Adding rate limiting with 0 users
+- Creating database migrations for a prototype -- use SQLite + direct schema changes
+- Building admin dashboards when a DB GUI tool suffices
+- Over-abstracting: 3 similar lines > 1 premature abstraction
 
 ## Level History
 
-- **Lv.1** — Base: 3-tier governance system with phase constraints, anti-patterns list, and scope violation flagging. Inspired by Intellegix portfolio governance. (Origin: MemStack v3.2, Feb 2026)
+- **Lv.1** -- Base: 3-tier governance system with phase constraints, anti-patterns, and scope violation flagging. (Origin: MemStack v3.2, Feb 2026)

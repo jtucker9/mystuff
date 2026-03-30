@@ -1,218 +1,158 @@
 ---
 name: n8n-workflow-builder
-description: "Use when the user says 'n8n workflow', 'build a workflow', 'automation workflow', 'n8n', 'workflow builder', or wants to design an automated workflow with triggers, processing, and outputs."
+description: "Design complete n8n workflows with node mapping, data transformations, error handling, and importable JSON. WHEN: 'n8n workflow', 'build a workflow', 'automation workflow', 'n8n', 'workflow builder', connecting services with trigger-process-output chains. NOT WHEN: standalone webhook endpoint without a workflow (webhook-designer), cron/scheduled task outside n8n (cron-scheduler), direct API-to-API integration without visual orchestration (api-integration), content publishing pipeline strategy (content-pipeline)."
 ---
 
-
-# ⚙️ N8N Workflow Builder — Visual Automation Design
-*Design complete n8n workflows with node mapping, data transformations, error handling, and importable JSON.*
+# N8N Workflow Builder
 
 ## Activation
 
-When this skill activates, output:
-
-`⚙️ N8N Workflow Builder — Designing your automation workflow...`
-
 | Context | Status |
 |---------|--------|
-| **User says "n8n workflow", "build a workflow", "automation"** | ACTIVE |
-| **User wants to connect services with trigger → process → output** | ACTIVE |
-| **User mentions n8n nodes, credentials, or workflow JSON** | ACTIVE |
-| **User wants a webhook endpoint (not a full workflow)** | DORMANT — see webhook-designer |
-| **User wants a cron job (not n8n scheduled)** | DORMANT — see cron-scheduler |
-| **User wants an API-to-API integration (not visual workflow)** | DORMANT — see api-integration |
+| User says "n8n workflow", "build a workflow", "automation" | ACTIVE |
+| User wants to connect services with trigger-process-output | ACTIVE |
+| User mentions n8n nodes, credentials, or workflow JSON | ACTIVE |
+| Standalone webhook endpoint, not a full workflow | DORMANT -- webhook-designer |
+| Cron job outside n8n | DORMANT -- cron-scheduler |
+| Direct API-to-API sync, no visual orchestration | DORMANT -- api-integration |
+| Content publishing strategy, not a specific workflow | DORMANT -- content-pipeline |
 
-## Protocol
+Output on activation: `N8N Workflow Builder -- Designing your automation workflow...`
 
-### Step 1: Gather Inputs
+## Instructions
 
-Ask the user for:
-- **Trigger event**: What starts the workflow? (webhook, schedule, app event, manual)
-- **Data source**: Where does input data come from? (API, database, email, file, form)
-- **Desired output**: What should happen at the end? (send email, update database, post to Slack, create record)
-- **Integrations needed**: Which services? (Google Sheets, Slack, Stripe, GitHub, Notion, Airtable, etc.)
-- **Frequency**: One-time, on-demand, or recurring? If recurring, how often?
+### Step 1: Gather and Classify
 
-### Step 2: Design Workflow Nodes
+Determine workflow shape:
+- **Trigger type**: webhook, schedule, app event (e.g., new Stripe charge), or manual
+- **Data source**: API, database, email, file, form submission
+- **Desired output**: what happens at the end (send email, update DB, post to Slack, create record)
+- **Integrations**: which services (Google Sheets, Slack, Stripe, GitHub, Notion, Airtable, etc.)
+- **Frequency**: one-time, on-demand, or recurring (if recurring, how often)
 
-Map the workflow as a node chain:
+**Gate**: Do not proceed without knowing trigger type, at least one integration, and desired output.
 
-```
-┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│   TRIGGER    │───→│   PROCESS    │───→│  TRANSFORM   │───→│    OUTPUT    │
-│              │    │              │    │              │    │              │
-│ [node type]  │    │ [node type]  │    │ [node type]  │    │ [node type]  │
-└──────────────┘    └──────────────┘    └──────────────┘    └──────────────┘
-```
+### Step 2: Node Chain Design
+
+Map the workflow as a node chain: Trigger -> Process -> Transform -> Output.
 
 For each node, specify:
 
 | Node | Type | Purpose | Config |
 |------|------|---------|--------|
-| 1. Trigger | [Webhook/Schedule/App Trigger] | [what starts it] | [settings] |
-| 2. Fetch | [HTTP Request/App Node] | [get data] | [endpoint, auth] |
-| 3. Process | [Code/Set/IF/Switch] | [transform/filter] | [logic] |
-| 4. Output | [App Node/HTTP Request] | [deliver result] | [settings] |
+| 1. Trigger | Webhook/Schedule/App Trigger | what starts it | settings |
+| 2. Fetch | HTTP Request/App Node | get data | endpoint, auth |
+| 3. Process | Code/Set/IF/Switch | transform/filter | logic |
+| 4. Output | App Node/HTTP Request | deliver result | settings |
 
-Include branching where needed:
-- **IF nodes**: For conditional paths (e.g., if status === 'paid', send receipt; else send reminder)
-- **Switch nodes**: For multi-path routing
-- **Merge nodes**: For combining parallel branches
+Branching rules:
+- **IF node**: two-path conditional (e.g., status === 'paid' -> receipt vs reminder)
+- **Switch node**: multi-path routing on a single field
+- **Merge node**: recombine parallel branches before output
 
-### Step 3: Map Data Transformations
+For complex workflows, add sub-workflow nodes to keep the canvas readable. If a branch exceeds 8 nodes, extract it.
 
-For each connection between nodes, define the field mapping:
+**Gate**: Node chain must be mapped and reviewed with the user before defining transformations.
 
-```
-── Node 1 → Node 2 ────────────────────────
-Source Field          →  Target Field          Transform
-─────────────────────────────────────────────
-{{ $json.email }}     →  to                    direct
-{{ $json.name }}      →  subject               template: "Hello {{ $json.name }}"
-{{ $json.amount }}    →  price                 Number: {{ $json.amount / 100 }}
-{{ $json.created }}   →  date                  Format: {{ DateTime.fromISO($json.created).toFormat('yyyy-MM-dd') }}
-```
+### Step 3: Data Transformations
 
-Common transformations:
-- **String**: `.toLowerCase()`, `.trim()`, template literals
-- **Number**: Division (cents to dollars), rounding, formatting
-- **Date**: ISO parse, format conversion, timezone handling
-- **Array**: `.map()`, `.filter()`, `.reduce()` in Code node
-- **Object**: Spread, pick fields, rename keys
+For each connection between nodes, define field mapping:
+- **Source expression**: `{{ $json.fieldName }}` syntax
+- **Target field**: destination property name
+- **Transform**: direct pass-through, template string, type conversion, or formula
+
+Common transforms:
+- String: `.toLowerCase()`, `.trim()`, template literals
+- Number: cents to dollars (`/ 100`), rounding
+- Date: `DateTime.fromISO().toFormat('yyyy-MM-dd')`, timezone conversion
+- Array: `.map()`, `.filter()` in Code node (not in expression fields)
+- Object: spread, pick fields, rename keys via Set node
+
+**Gate**: Verify no field references point to nodes that don't exist in the chain.
 
 ### Step 4: Error Handling
 
 Design failure paths for each critical node:
 
-```
-┌──────────────┐    ┌──────────────┐
-│  Main Node   │──✗─│ Error Branch │
-│              │    │              │
-│  [action]    │    │ • Log error  │
-│              │    │ • Notify     │
-│              │    │ • Retry/Skip │
-└──────────────┘    └──────────────┘
-```
-
-**Error handling strategy per node:**
-
-| Node | On Failure | Retry? | Fallback |
-|------|-----------|--------|----------|
-| HTTP Request | Log + retry | 3x with 5s backoff | Send alert, skip item |
+| Node Type | On Failure | Retry | Fallback |
+|-----------|-----------|-------|----------|
+| HTTP Request | Log + retry | 3x, 5s backoff | Alert + skip |
 | Database | Log + alert | 1x | Queue for manual review |
-| External API | Log + retry | 3x with exponential | Use cached data |
-| Webhook delivery | Log + retry | 5x with backoff | Dead letter queue |
+| External API | Log + retry | 3x exponential | Use cached data |
+| Webhook delivery | Log + retry | 5x backoff | Dead letter queue |
 
-**Error notification node** (add to every workflow):
-- Send to Slack channel, email, or webhook on any unhandled error
-- Include: workflow name, node that failed, error message, input data
+Every workflow gets an error notification node: Slack channel, email, or webhook on any unhandled error. Include workflow name, failed node, error message, and input data.
 
 ### Step 5: Credential Setup
 
-For each integration, provide setup guidance:
+For each integration, specify:
+- Auth type (API Key / OAuth2 / Basic Auth)
+- Where to create credentials (URL to developer console)
+- Required scopes
+- Rate limits, expiration, rotation notes
+- n8n path: Settings -> Credentials -> Add -> [Service]
 
-```
-── CREDENTIALS NEEDED ─────────────────────
+**Gate**: All credentials must be identified before generating workflow JSON.
 
-1. [Service Name]
-   Type: [API Key / OAuth2 / Basic Auth]
-   Setup:
-     a. Go to [URL]
-     b. Create [API key / OAuth app]
-     c. Copy [key/secret/token]
-     d. In n8n: Settings → Credentials → Add → [Service]
-     e. Paste credentials
-   Scopes needed: [list required scopes]
-   Notes: [rate limits, expiration, rotation]
+### Step 6: Scheduling (if applicable)
 
-2. [Service Name]
-   ...
-```
-
-### Step 6: Testing Approach
-
-**Test each node individually:**
-1. Run trigger node alone — verify it produces expected data shape
-2. Test each processing node with pinned test data
-3. Verify data transformations match expected output
-4. Test error paths by deliberately sending bad data
-
-**End-to-end testing:**
-1. Execute workflow with test data (use n8n's "Test Workflow" button)
-2. Verify each node's output in the execution log
-3. Confirm final output in destination system
-4. Test with edge cases: empty data, large payloads, special characters
-5. Test error recovery: disconnect a service, verify error handling fires
-
-### Step 7: Scheduling
-
-If the workflow runs on a schedule:
-
-```
-── SCHEDULE CONFIGURATION ─────────────────
-
-Cron Expression: [expression]
-Human Readable: [description]
-Timezone: [timezone]
-
-Examples:
-  Every 15 minutes:  */15 * * * *
-  Every hour:        0 * * * *
-  Daily at 9 AM:     0 9 * * *
-  Mon-Fri at 8 AM:   0 8 * * 1-5
-  First of month:    0 0 1 * *
-```
-
-Scheduling considerations:
+For scheduled workflows:
 - Set timezone explicitly (n8n defaults to server timezone)
-- Avoid running at exact hour marks (:00) — high API traffic
-- For API-heavy workflows, stagger by a few minutes
-- Consider overlap: will the previous run finish before next starts?
+- Avoid exact hour marks (:00) -- stagger by 3-7 minutes to reduce API congestion
+- Confirm previous run will finish before next starts (overlap risk)
+- Cron reference: `*/15 * * * *` (every 15 min), `0 9 * * 1-5` (weekdays 9AM)
 
-### Step 8: Output
+### Step 7: Testing Plan
+
+**Node-level**: run each node alone with pinned test data, verify output shape matches downstream expectations.
+
+**End-to-end**: execute full workflow via n8n's "Test Workflow" button. Check each node's output in execution log. Test edge cases: empty data, large payloads, special characters.
+
+**Error path**: deliberately send bad data or disconnect a service to verify error handling fires.
+
+### Step 8: Deliver Output
 
 Present the complete workflow specification:
+- Overview: trigger, purpose, schedule, services
+- Node map with connections
+- Node details: config, input shape, output shape per node
+- Data transformations between nodes
+- Error handling per node
+- Credential setup instructions
+- Test plan
+- Importable n8n workflow JSON (when workflow is simple enough)
 
-```
-━━━ N8N WORKFLOW: [Workflow Name] ━━━━━━━━━
+If providing workflow JSON, ensure it is valid for import via Settings -> Import Workflow.
 
-── OVERVIEW ───────────────────────────────
-Trigger: [what starts it]
-Purpose: [what it does]
-Schedule: [frequency]
-Services: [list of integrations]
+## Examples
 
-── NODE MAP ───────────────────────────────
-[visual node chain with descriptions]
+**Stripe-to-Slack payment alerts**: Webhook trigger receives Stripe `payment_intent.succeeded`. Code node extracts customer email + amount (cents to dollars). IF node checks amount > $100 for VIP path. Slack node posts formatted message to #payments channel. Error branch sends failure alerts to #ops. Result: importable 5-node workflow JSON.
 
-── NODE DETAILS ───────────────────────────
-Node 1: [name] — [type]
-  Config: [settings]
-  Input: [data shape]
-  Output: [data shape]
+**Daily CRM sync to Google Sheets**: Schedule trigger at 7:03 AM weekdays. HTTP Request node fetches new leads from CRM API with date filter. Set node maps fields (name, email, company, score). Google Sheets node appends rows. Error handler retries API failures 3x, alerts on exhaustion. Result: node spec + cron config + credential setup for both services.
 
-Node 2: [name] — [type]
-  ...
+## Common Issues
 
-── DATA TRANSFORMATIONS ───────────────────
-[field mapping tables]
+1. **Expression syntax errors**: n8n expressions use `{{ }}` double-brace syntax, not `${}` JS template literals. Expressions reference `$json`, `$node`, `$input` -- not raw variable names.
+2. **OAuth token expiry mid-workflow**: long-running workflows with many API calls can exhaust token TTL. Fix: use n8n's built-in credential refresh, or add a re-auth node before the batch processing step.
+3. **Schedule overlap**: a workflow takes 20 minutes but runs every 15 minutes, causing duplicate processing. Fix: add a lock check (e.g., check a flag in Redis/DB) at the start, or increase the interval.
 
-── ERROR HANDLING ─────────────────────────
-[error paths per node]
+## Anti-Patterns
 
-── CREDENTIALS ────────────────────────────
-[setup instructions per service]
+- Using Code nodes for everything instead of native app nodes (loses retry/auth/credential management)
+- Hardcoding API keys in Code nodes instead of using n8n Credentials
+- Building one monolithic 30-node workflow instead of splitting into sub-workflows
+- No error notification node -- failures silently disappear
+- Polling an API every minute when the source offers webhooks
+- Skipping idempotency -- assumes events are delivered exactly once (they are not)
 
-── TEST PLAN ──────────────────────────────
-[node-by-node + end-to-end tests]
+## Escalation
 
-── WORKFLOW JSON ──────────────────────────
-[importable n8n JSON or instructions to build]
-```
-
-If the workflow is simple enough, provide the actual n8n workflow JSON that can be imported via Settings → Import Workflow.
+- Workflow requires nodes for a service n8n doesn't support natively: use HTTP Request node with manual auth, document the custom integration, or suggest a community node
+- Data volume exceeds n8n memory limits (large CSV imports, thousands of items): split into batched sub-workflows using the SplitInBatches node
+- User needs guaranteed ordering across events: n8n processes items in order within a single execution but does not guarantee order across executions -- add sequence tracking if ordering matters
 
 ## Inputs
+
 - Trigger event type
 - Data source and format
 - Desired output / destination
@@ -220,15 +160,17 @@ If the workflow is simple enough, provide the actual n8n workflow JSON that can 
 - Frequency / schedule
 
 ## Outputs
+
 - Visual node map with connections
-- Detailed node configurations
-- Data transformation mappings between nodes
+- Node configurations with input/output shapes
+- Data transformation mappings
 - Error handling strategy per node
-- Credential setup guide per service
-- Testing plan (node-by-node + end-to-end)
-- Schedule configuration with cron expression
+- Credential setup guide
+- Testing plan
+- Schedule configuration (if applicable)
 - Importable workflow JSON (when feasible)
 
 ## Level History
 
-- **Lv.1** — Base: Node chain design with trigger/process/transform/output mapping, data transformation tables, error handling with retry and fallback paths, credential setup guides, testing approach (node-level + E2E), cron scheduling, importable JSON output format. (Origin: MemStack v3.2, Mar 2026)
+- **Lv.1** -- Base: Node chain design with trigger/process/transform/output mapping, data transformation tables, error handling with retry and fallback paths, credential setup guides, testing approach (node-level + E2E), cron scheduling, importable JSON output format. (Origin: MemStack v3.2, Mar 2026)
+- **Lv.2** -- Compressed: Creator-level density rewrite per Anthropic skill guide. Added negative triggers in frontmatter, validation gates between steps, Examples, Common Issues, Anti-Patterns, Escalation sections. Removed tutorial code and ASCII diagrams. (Origin: MemStack v3.2, Mar 2026)

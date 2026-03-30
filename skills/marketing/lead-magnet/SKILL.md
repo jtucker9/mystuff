@@ -1,198 +1,140 @@
 ---
 name: lead-magnet
-description: "Use when the user says 'lead magnet', 'opt-in', 'freebie', 'email list', 'list building', 'opt-in page', or wants to create a free resource to capture email subscribers."
+description: "Use when the user says 'lead magnet', 'opt-in', 'freebie', 'email list', 'list building', 'opt-in page', or wants to create a free resource to capture email subscribers. Do NOT use for full-funnel design (use sales-funnel), paid ad copy (use facebook-ad/google-ad), or email sequence writing without a lead magnet context (use email-sequence)."
 ---
 
-
-# 🧲 Lead Magnet — Opt-In Asset & Delivery System
+# Lead Magnet -- Opt-In Asset and Delivery System
 *Design a high-converting lead magnet with landing page copy, delivery emails, and nurture sequence.*
 
 ## Activation
 
 When this skill activates, output:
 
-`🧲 Lead Magnet — Designing your lead capture system...`
+`Lead Magnet -- Designing your lead capture system...`
 
 | Context | Status |
 |---------|--------|
 | **User says "lead magnet", "opt-in", "freebie", "list building"** | ACTIVE |
 | **User wants to grow their email list** | ACTIVE |
 | **User wants landing page copy for a free resource** | ACTIVE |
-| **User wants the full funnel (not just lead magnet)** | DORMANT — see sales-funnel |
-| **User wants paid ad copy to promote the lead magnet** | DORMANT — see facebook-ad or google-ad |
+| **User wants the full funnel (not just lead magnet)** | DORMANT -- see sales-funnel |
+| **User wants paid ad copy to promote the lead magnet** | DORMANT -- see facebook-ad or google-ad |
 
-## Protocol
+## Instructions
 
 ### Step 1: Gather Inputs
 
 Ask the user for:
 - **Niche/industry**: What space are you in?
 - **Audience pain points**: Top 3 problems your audience faces
-- **Existing content**: Do you have blog posts, videos, or tools to repurpose?
+- **Existing content**: Blog posts, videos, or tools to repurpose?
 - **Core offer**: What paid product does the lead magnet lead toward?
-- **Email platform**: ConvertKit, Mailchimp, SendGrid, Beehiiv, or other?
+- **Email platform**: ConvertKit, Mailchimp, Beehiiv, or other?
 
-### Step 2: Suggest 5 Lead Magnet Concepts
+**Gate:** Do not proceed until niche, at least one pain point, and core offer are known.
 
-Generate 5 options across different formats:
+### Step 2: Select Lead Magnet Format
 
-| # | Type | Concept | Est. Opt-in Rate | Effort |
-|---|------|---------|-------------------|--------|
-| 1 | **Checklist** | [specific checklist title] | 30-40% | Low |
-| 2 | **Template** | [specific template title] | 25-35% | Low-Med |
-| 3 | **Mini-course** | [specific course title, 3-5 emails] | 20-30% | Medium |
-| 4 | **Tool/Calculator** | [specific tool description] | 35-50% | High |
-| 5 | **Report/Guide** | [specific report title] | 15-25% | Medium |
+Choose format based on audience and effort budget:
 
-Recommend the top pick based on audience, effort, and conversion potential.
+| Format | Best When | Est. Opt-in Rate | Effort |
+|--------|-----------|-------------------|--------|
+| Checklist | Audience wants quick wins, low trust barrier | 30-40% | Low |
+| Template | Audience needs done-for-you starting points | 25-35% | Low-Med |
+| Mini-course | Topic requires sequential learning (3-5 emails) | 20-30% | Medium |
+| Tool/Calculator | Quantifiable problem, high perceived value | 35-50% | High |
+| Report/Guide | Audience values data and authority | 15-25% | Medium |
 
-### Step 3: Design the Top Pick
+**Decision logic:**
+- Audience is time-poor and action-oriented --> Checklist or Template
+- Problem is complex or sequential --> Mini-course
+- Product is data-driven or financial --> Tool/Calculator
+- Audience is research-heavy (B2B, enterprise) --> Report/Guide
 
-For the recommended lead magnet:
+Generate 3-5 options, recommend top pick with rationale.
 
-**Content Outline:**
-- Title (specific, outcome-focused)
-- Subtitle (what they'll achieve)
+**Gate:** User confirms format before designing content.
+
+### Step 3: Design Content Outline
+
+For the selected format, produce:
+- Title (specific, outcome-focused -- not vague)
+- Subtitle (what they will achieve)
 - Format and length (PDF pages, email count, tool type)
-- Section-by-section outline (3-7 sections)
-- Key takeaway per section
+- Section-by-section outline (3-7 sections) with key takeaway per section
 - Estimated creation time
-
-**Design Direction:**
-- Color palette suggestion (match brand or niche standard)
-- Layout type (single-column, card-based, worksheet)
-- Include: cover image, branded header, footer CTA
 
 ### Step 4: Write Opt-In Page Copy
 
-**Headline** (8-12 words):
-- Formula: [Get/Download/Grab] + [Specific Outcome] + [Timeframe/Ease]
-- Example: "Download the 7-Step Checklist That Doubles Your Close Rate"
+**Headline** (8-12 words): `[Get/Download/Grab] + [Specific Outcome] + [Timeframe/Ease]`
 
-**Subheadline** (15-20 words):
-- Expand on the promise, address skepticism
-- Example: "Used by 500+ sales teams to increase revenue without cold calling"
+**Subheadline** (15-20 words): Expand on promise, address skepticism.
 
-**Bullet points** (3-5):
-- Each starts with a benefit verb: Discover, Learn, Get, Unlock, Master
-- Each promises a specific outcome
+**Bullet points** (3-5): Each starts with a benefit verb (Discover, Learn, Get, Unlock). Each promises a specific outcome.
 
-**Social proof** (if available):
-- Subscriber count, testimonial quote, or credibility marker
+**CTA button text**: Action words only -- "Send Me the Checklist", "Get Instant Access". Never "Submit".
 
-**CTA button text**:
-- Not "Submit" — use action words: "Send Me the Checklist", "Get Instant Access", "Yes, I Want This"
+**Form fields**: Email only (highest conversion). Add First Name only if segmentation is required.
 
-**Form fields**:
-- Minimum viable: Email only (highest conversion)
-- If segmentation needed: Email + First Name
-- Never ask for more than necessary
+**Gate:** Headline must pass the "would I click this?" test -- specific outcome, not generic.
 
-### Step 5: Design Delivery Sequence
+### Step 5: Design 5-Email Delivery Sequence
 
-**Thank You Page (immediately after opt-in):**
-- Confirm delivery ("Check your inbox!")
-- Set expectations for what's coming next
-- Optional: tripwire offer or low-cost upsell ($7-$27)
+| Email | Timing | Purpose | Subject Line Pattern |
+|-------|--------|---------|---------------------|
+| 1 -- Delivery | Day 0 | Deliver asset + quick-start tip | "Here's your [Name]" |
+| 2 -- Quick Win | Day 2 | Most impactful action from asset | "Do this first with your [Name]" |
+| 3 -- Story/Proof | Day 4 | Case study showing results | "How [Person] used this to [Result]" |
+| 4 -- Bridge | Day 6 | Gap between free asset and full transformation | "The next step after [Topic]" |
+| 5 -- Offer | Day 8 | Present core offer with FAQ | "Ready for [Full Outcome]?" |
 
-**Email 1 — Delivery (immediate):**
-- Subject: "Here's your [Lead Magnet Name]"
-- Body: Download link, quick-start tip, expectation for next emails
-- PS: One-line about who you are and why you help
+Optional: Thank-you page tripwire offer ($7-$27) immediately after opt-in.
 
-**Email 2 — Quick Win (Day 2):**
-- Subject: "Do this first with your [Lead Magnet Name]"
-- Body: Most impactful action they can take right now
-- Build credibility through helpfulness
+### Step 6: Platform Integration
 
-**Email 3 — Story/Proof (Day 4):**
-- Subject: "How [Name] used this to [Result]"
-- Body: Case study or personal story showing results
-- Soft bridge toward core offer
+Provide setup steps for the user's email platform:
+- **ConvertKit**: Form --> Sequence --> Tag subscribers
+- **Mailchimp**: Landing Page --> Automation --> Tags by engagement
+- **Beehiiv/SendGrid**: Webhook for form submission, API integration, drip config
 
-**Email 4 — Bridge (Day 6):**
-- Subject: "The next step after [Lead Magnet topic]"
-- Body: Identify the gap between lead magnet and full transformation
-- Introduce core offer as the bridge
+### Step 7: Output Summary
 
-**Email 5 — Offer (Day 8):**
-- Subject: "Ready for [Full Outcome]?"
-- Body: Full offer presentation with link
-- Include FAQ or objection handling
-
-### Step 6: Integration Guidance
-
-Platform-specific setup for the top 3 email providers:
-
-**ConvertKit:**
-- Create Form → Connect to Sequence → Tag subscribers
-- Automation: Form submit → Deliver email → Wait → Nurture sequence
-
-**Mailchimp:**
-- Create Landing Page → Connect to Automation → Add tags
-- Automation: Subscriber joins list → Welcome series → Tag based on engagement
-
-**SendGrid / Beehiiv:**
-- Webhook setup for form submission
-- API integration pattern for custom landing pages
-- Drip sequence configuration
-
-### Step 7: Metrics & Benchmarks
-
-Expected performance benchmarks by lead magnet type:
-
-| Metric | Checklist | Template | Mini-Course | Tool | Report |
-|--------|-----------|----------|-------------|------|--------|
-| Opt-in rate | 30-40% | 25-35% | 20-30% | 35-50% | 15-25% |
-| Email open rate | 60-70% | 55-65% | 70-80% | 50-60% | 50-60% |
-| Nurture-to-sale | 3-5% | 3-5% | 5-8% | 2-4% | 2-4% |
-
-Track: opt-in rate, delivery email open rate, click rate, unsubscribe rate after sequence.
-
-### Step 8: Output
-
-Present the complete lead magnet specification:
+Present the complete spec in this structure:
 
 ```
-━━━ LEAD MAGNET SPEC: [Title] ━━━━━━━━━━━━━
-
-── CONCEPT ────────────────────────────────
-Type: [checklist/template/etc.]
-Title: [name]
-Format: [PDF/email/tool]
-Length: [pages/emails/etc.]
-Creation time: [estimate]
-
-── CONTENT OUTLINE ────────────────────────
-1. [Section] — [key takeaway]
-2. [Section] — [key takeaway]
-...
-
-── OPT-IN PAGE ────────────────────────────
-Headline: [text]
-Subheadline: [text]
-Bullets:
-  • [benefit 1]
-  • [benefit 2]
-  • [benefit 3]
-CTA: [button text]
-
-── DELIVERY SEQUENCE ──────────────────────
-Email 1 (Day 0): [subject] — Deliver asset
-Email 2 (Day 2): [subject] — Quick win
-Email 3 (Day 4): [subject] — Story/proof
-Email 4 (Day 6): [subject] — Bridge
-Email 5 (Day 8): [subject] — Offer
-
-── INTEGRATION ────────────────────────────
-Platform: [name]
-Setup: [key steps]
-
-── BENCHMARKS ─────────────────────────────
-Target opt-in rate: X%
-Target open rate: X%
-Target nurture-to-sale: X%
+--- LEAD MAGNET SPEC: [Title] ---
+Concept: [type], [format], [length], [creation time]
+Content: [section outline]
+Opt-in Page: [headline, subheadline, bullets, CTA]
+Delivery Sequence: [5 emails with subjects and timing]
+Platform: [integration steps]
+Benchmarks: opt-in [X%], open rate [X%], nurture-to-sale [X%]
 ```
+
+## Examples
+
+**Example 1: SaaS onboarding checklist**
+Input: "I sell a $49/mo project management SaaS. Audience is freelancers."
+Output: Checklist -- "The 10-Minute Setup That Makes Freelancers Look Like Agencies". PDF, 2 pages. Opt-in rate target: 35%. 5-email sequence bridging to free trial.
+
+**Example 2: B2B industry report**
+Input: "We sell $5K/mo marketing services to e-commerce brands."
+Output: Report -- "2026 E-Commerce Ad Spend Benchmarks by Channel". PDF, 12 pages. Opt-in rate target: 20%. 5-email sequence bridging to strategy call booking.
+
+## Common Issues
+
+- **Low opt-in rate (<15%)**: Headline is too vague or generic. Rewrite with a specific, measurable outcome.
+- **High opt-in, low open rate**: Delivery email lands in spam. Shorten subject line, avoid "free" in subject, use plain text format.
+- **Nurture sequence ignored after Email 1**: Email 2 does not provide enough standalone value. Make each email useful even without the asset.
+
+## Anti-Patterns
+
+- Gating content behind too many form fields (name + email + phone + company = conversion killer)
+- Making the lead magnet a sales pitch disguised as free content
+- Sending the offer email (Email 5) before establishing any trust or value
+- Creating a 30-page PDF when a 1-page checklist would convert better
+- Using "Download Now" or "Submit" as CTA text
+- Designing the lead magnet without knowing what paid offer it leads toward
 
 ## Inputs
 - Niche/industry
@@ -202,7 +144,7 @@ Target nurture-to-sale: X%
 - Email platform
 
 ## Outputs
-- 5 lead magnet concepts ranked by conversion potential and effort
+- 3-5 lead magnet concepts ranked by conversion potential and effort
 - Detailed content outline for top pick
 - Opt-in page copy (headline, subheadline, bullets, CTA)
 - 5-email delivery and nurture sequence
@@ -211,4 +153,5 @@ Target nurture-to-sale: X%
 
 ## Level History
 
-- **Lv.1** — Base: 5-concept suggestion matrix, opt-in page copywriting framework, 5-email delivery/nurture sequence, platform integration guidance (ConvertKit, Mailchimp, SendGrid), performance benchmarks by lead magnet type. (Origin: MemStack v3.2, Mar 2026)
+- **Lv.1** -- Base: 5-concept suggestion matrix, opt-in page copywriting framework, 5-email delivery/nurture sequence, platform integration guidance, performance benchmarks by type. (Origin: MemStack v3.2, Mar 2026)
+- **Lv.2** -- Guide alignment: Added negative triggers, validation gates, decision logic for format selection, examples, common issues, anti-patterns. Renamed Protocol to Instructions. Removed emoji from title. (Origin: Anthropic skill guide alignment, Mar 2026)

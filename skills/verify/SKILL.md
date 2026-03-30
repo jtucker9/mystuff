@@ -1,94 +1,58 @@
 ---
 name: verify
-description: "Use when the user says 'verify', 'check this work', 'does it pass', or before committing completed work."
+description: "Use when the user says 'verify', 'check this work', 'does it pass', or before committing completed work. Do NOT use for code review of others' code (use code-reviewer), running tests in isolation, or pre-push checks (hooks handle that)."
 ---
 
 
-# ✅ Verify — Checking Work...
+# Verify -- Checking Work
 *Review completed work against requirements before committing.*
 
 ## Activation
 
 When this skill activates, output:
 
-`✅ Verify — Checking work against requirements...`
+`Verify -- Checking work against requirements...`
 
-Then execute the protocol below.
+Then execute the instructions below.
 
 ## Context Guard
 
-| Context | Status | Priority |
-|---------|--------|----------|
-| **User says "verify", "check this work", "does it pass"** | ACTIVE — run verification | P1 |
-| **User says "is this done", "ready to commit"** | ACTIVE — run verification | P1 |
-| **User is mid-task, still actively coding** | DORMANT — let them finish first | — |
-| **User asks to commit or push** | DORMANT — Seal hook handles pre-push checks | — |
-| **User asks to review someone else's code** | DORMANT — not a code review tool | — |
+| Context | Status |
+|---------|--------|
+| **User says "verify", "check this work", "does it pass"** | ACTIVE -- run verification |
+| **User says "is this done", "ready to commit"** | ACTIVE -- run verification |
+| **User is mid-task, still actively coding** | DORMANT -- let them finish first |
+| **User asks to commit or push** | DORMANT -- Seal hook handles pre-push checks |
+| **User asks to review someone else's code** | DORMANT -- use code-reviewer skill |
 
-## Anti-Rationalization
-
-If you're thinking any of these, STOP — you're about to skip the protocol:
-
-| You're thinking... | Reality |
-|---|---|
-| "I already tested this manually" | Ad-hoc testing leaves no record. Run the automated checks. |
-| "This change is too small to verify" | Small changes cause regressions. Run the full protocol. |
-| "The build passed, so it's fine" | Build passing ≠ requirements met. Always do the manual requirement check (Step 3). |
-| "I'll just commit and fix issues later" | Issues found after commit are 10x harder to fix. Verify first. |
-| "There are no tests for this project" | Skip automated tests, but ALWAYS do the manual requirement check and common issues scan. |
-| "The user seems in a hurry" | Shipping broken code wastes more time than verification takes. |
-
-## Protocol
+## Instructions
 
 ### Step 1: Identify the Task
 
-Determine what was being built by checking:
-- Recent conversation context (what the user asked for)
-- Git diff for uncommitted changes
-- Recent commits if already committed
-
-Summarize: "**Task:** [what was being built/changed]"
+Determine what was being built from conversation context, git diff, or recent commits. Summarize: "**Task:** [what was being built/changed]"
 
 ### Step 2: Run Automated Checks
 
 Run whatever applies to the current project:
 
-**Build check:**
 ```bash
-# Detect and run the project's build command
-npm run build    # Node.js
-make build       # Makefile
-python -m py_compile <file>  # Python
-```
-
-**Test check:**
-```bash
-# Detect and run the project's test command
-npm test         # Node.js
-pytest           # Python
-make test        # Makefile
-```
-
-**Lint check (if available):**
-```bash
-npm run lint     # Node.js
+npm run build    # or make build, python -m py_compile <file>
+npm test         # or pytest, make test
+npm run lint     # if available
 ```
 
 If no build/test tooling exists, skip and note "No automated checks configured."
 
 ### Step 3: Manual Requirement Check
 
-Compare the completed work against the original requirements:
-- List each requirement from the original task
-- Check whether it was implemented
-- Flag any gaps, missing edge cases, or regressions
+Compare completed work against original requirements. List each requirement, check whether it was implemented, flag gaps or missing edge cases.
 
 ### Step 4: Check for Common Issues
 
-- **Uncommitted debug code**: `console.log`, `print()`, `debugger`, `TODO` markers left behind
-- **Hardcoded values**: Magic numbers, hardcoded URLs, temp credentials
-- **Missing error handling**: Unhandled promises, missing try/catch at boundaries
-- **Incomplete cleanup**: Unused imports, dead code from earlier attempts
+- Uncommitted debug code: `console.log`, `print()`, `debugger`, `TODO` left behind
+- Hardcoded values: magic numbers, hardcoded URLs, temp credentials
+- Missing error handling: unhandled promises, missing try/catch at boundaries
+- Incomplete cleanup: unused imports, dead code from earlier attempts
 
 ### Step 5: Generate Report
 
@@ -99,64 +63,45 @@ Compare the completed work against the original requirements:
 ### Task: {what was being built}
 
 ### Automated Checks
-- [x] Build: passes / [ ] fails — {error}
-- [x] Tests: passes / [ ] fails — {error}
+- [x] Build: passes / [ ] fails -- {error}
+- [x] Tests: passes / [ ] fails -- {error}
 - [x] Lint: passes / [ ] N/A
 
 ### Requirements
-- [x] {Requirement 1} — implemented in {file}
-- [x] {Requirement 2} — implemented in {file}
-- [ ] {Requirement 3} — MISSING: {what's needed}
+- [x] {Requirement 1} -- implemented in {file}
+- [ ] {Requirement 3} -- MISSING: {what's needed}
 
 ### Issues Found
-1. {Issue} → {Suggested fix}
+1. {Issue} -> {Suggested fix}
 
 ### Verdict: PASS / NEEDS FIX
 ```
 
-### Step 6: Recommend Action
+**PASS:** "Looks good. Ready to commit."
+**NEEDS FIX:** List specific fixes, prioritized by severity.
 
-- **PASS**: "Looks good. Ready to commit."
-- **NEEDS FIX**: List specific fixes needed, prioritized by severity.
+## Examples
 
-## Inputs
-- Current working context (project, recent changes)
-- Original task requirements (from conversation or plan)
-- Git diff / status for change analysis
+**Clean verification:**
+User: "verify this work" -> Run build+tests (pass), check requirements (all met), scan for debug code (clean). Verdict: PASS.
 
-## Outputs
-- Verification report with pass/fail checklist
-- Specific fix recommendations if issues found
+**Failed verification:**
+User: "is this done?" -> Run build (pass), tests (1 failure), find leftover `console.log` in production code. Verdict: NEEDS FIX with 2 items.
 
-## Example Usage
+## Common Issues
 
-**User:** "verify this work"
+| Issue | Fix |
+|-------|-----|
+| No test tooling in the project | Skip automated tests but always run the manual requirement check and debug code scan |
+| Build passes but requirements are not met | Build passing does not equal requirements met -- always do Step 3 |
 
-```
-✅ Verify — Checking work against requirements...
+## Anti-Patterns
 
-## Verification Report
-Task: Add user registration API endpoint
-
-### Automated Checks
-- [x] Build: passes
-- [x] Tests: 14/14 passing
-- [x] Lint: clean
-
-### Requirements
-- [x] POST /api/register endpoint — server/routes/auth.ts
-- [x] Email validation — uses zod schema
-- [x] Password hashing — bcrypt with salt rounds=12
-- [ ] Rate limiting — MISSING: no rate limiter on registration endpoint
-
-### Issues Found
-1. No rate limiting on /api/register → Add express-rate-limit middleware
-
-### Verdict: NEEDS FIX (1 issue)
-```
+- Skipping verification because "the change is too small" -- small changes cause regressions
+- Reporting PASS without running automated checks when they exist
+- Running verification mid-task before the user has finished working
+- Treating build success as proof that all requirements are met
 
 ## Level History
 
-- **Lv.1** — Base: Pre-commit verification with automated + manual checks, structured report output, framework-agnostic detection. (Origin: MemStack v3.1, Feb 2026)
-
-> 💎 Pro: PostToolUse hook auto-logs this work to your observation history.
+- **Lv.1** -- Base: Pre-commit verification with automated + manual checks, structured report output. (Origin: MemStack v3.1, Feb 2026)

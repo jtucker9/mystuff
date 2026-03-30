@@ -1,233 +1,98 @@
 ---
 name: feedback-analyzer
-description: "Use when the user says 'analyze feedback', 'feedback analysis', 'customer feedback', 'feature requests', 'support tickets', 'user reviews', or has raw user feedback that needs categorization and prioritization."
+description: "Use when the user says 'analyze feedback', 'feedback analysis', 'customer feedback', 'feature requests', 'support tickets', 'user reviews', or has raw user feedback that needs categorization and prioritization. Do NOT use for competitor/market analysis (see competitor-analysis), roadmap planning without feedback data (see roadmap-builder), or writing feature specs (see feature-spec)."
 ---
 
+# Feedback Analyzer -- Customer Feedback Intelligence
 
-# 📊 Feedback Analyzer — Customer Feedback Intelligence
 *Categorize, score, and prioritize raw user feedback into an actionable report with executive summary.*
 
 ## Activation
 
 When this skill activates, output:
 
-`📊 Feedback Analyzer — Analyzing your customer feedback...`
+`Feedback Analyzer -- Analyzing your customer feedback...`
 
 | Context | Status |
 |---------|--------|
 | **User says "analyze feedback", "feedback analysis"** | ACTIVE |
 | **User has support tickets, reviews, or survey data to process** | ACTIVE |
 | **User asks "what are customers asking for?"** | ACTIVE |
-| **User wants to build a roadmap from feedback** | Chain: feedback-analyzer → roadmap-builder |
-| **User wants to write feature specs from feedback** | Chain: feedback-analyzer → feature-spec |
-| **User wants competitor analysis (not user feedback)** | DORMANT — see competitor-analysis |
+| **User wants to build a roadmap from feedback** | Chain: feedback-analyzer then roadmap-builder |
+| **User wants competitor analysis (not user feedback)** | DORMANT -- see competitor-analysis |
 
-## Protocol
+## Instructions
 
 ### Step 1: Gather Inputs
 
 Ask the user for:
-- **Feedback source**: What kind of feedback? (support tickets, app reviews, NPS surveys, social media, sales call notes, forum posts)
-- **Raw data**: Paste the feedback, provide a file, or describe the themes
-- **Product context**: What product is this feedback about?
-- **Time period**: When was this feedback collected?
-- **User segments**: Any known segmentation? (plan type, tenure, geography)
+- **Feedback source**: support tickets, app reviews, NPS surveys, social media, sales call notes, forum posts
+- **Raw data**: paste, file, or described themes
+- **Product context**: which product
+- **Time period**: when collected
+- **User segments** (optional): plan type, tenure, geography
 
-### Step 2: Categorize Feedback by Theme
+**Gate**: Must have raw data or described themes plus product context before proceeding.
 
-Classify each piece of feedback into categories:
+### Step 2: Categorize by Theme
 
-| Category | Icon | Description |
-|----------|------|-------------|
-| **Bug Report** | 🐛 | Something is broken or not working as expected |
-| **Feature Request** | ✨ | User wants new functionality |
-| **UX Issue** | 😤 | Feature exists but is confusing, slow, or frustrating |
-| **Praise** | 💚 | Positive feedback, what users love |
-| **Confusion** | ❓ | User doesn't understand how something works |
-| **Churn Signal** | 🚪 | User is considering leaving or has left |
+Classify each item into: Bug Report, Feature Request, UX Issue, Praise, Confusion, Churn Signal. For each: ID, category, one-line summary, source, segment, verbatim quote.
 
-For each feedback item:
-```
-[ID] [Category Icon] [One-line summary]
-     Source: [where it came from]
-     Segment: [user type if known]
-     Verbatim: "[exact user quote]"
-```
+Group related requests into unified themes ("dark mode" + "night theme" + "less bright" = one theme).
 
 ### Step 3: Sentiment Analysis
 
-Score sentiment per category and overall:
+Score sentiment per category (-1.0 to +1.0) and compute overall sentiment. Note trend vs. last period if available (improving / stable / declining).
 
-| Category | Count | Positive | Neutral | Negative | Avg Sentiment |
-|----------|-------|----------|---------|----------|--------------|
-| Bug Reports | [n] | — | — | [n] | -0.8 |
-| Feature Requests | [n] | [n] | [n] | [n] | +0.2 |
-| UX Issues | [n] | — | [n] | [n] | -0.5 |
-| Praise | [n] | [n] | — | — | +0.9 |
-| Confusion | [n] | — | [n] | [n] | -0.3 |
-| Churn Signals | [n] | — | — | [n] | -0.9 |
+### Step 4: Frequency and Impact Ranking
 
-**Overall sentiment**: [score from -1.0 to +1.0]
-**Trend**: [improving / stable / declining] compared to last period (if available)
-
-### Step 4: Frequency Ranking
-
-Rank by how often each theme appears:
-
-| Rank | Theme | Count | % of Total | Category | Trend |
-|------|-------|-------|-----------|----------|-------|
-| 1 | [most mentioned theme] | [n] | [%] | [type] | ↑↓→ |
-| 2 | [second theme] | [n] | [%] | [type] | ↑↓→ |
-| 3 | [third theme] | [n] | [%] | [type] | ↑↓→ |
-| ... | ... | ... | ... | ... | ... |
-
-Group related requests: "dark mode", "night theme", and "less bright" = same theme.
-
-### Step 5: Impact Assessment
-
-Score each theme by impact:
-
-| Theme | Users Affected | Revenue Impact | Effort | Priority Score |
-|-------|---------------|----------------|--------|---------------|
-| [theme] | [many/some/few] | [high/med/low] | [high/med/low] | [1-10] |
-| [theme] | [many/some/few] | [high/med/low] | [high/med/low] | [1-10] |
-
-**Impact scoring:**
+Rank themes by frequency (count, % of total). Then score each by impact:
 - Users Affected: Many (3) / Some (2) / Few (1)
-- Revenue Impact: High (3) / Medium (2) / Low (1)
-- Effort (inverted): Low effort (3) / Medium (2) / High (1)
-- Priority Score = Users × Revenue × Effort (max 27, normalize to 10)
+- Revenue Impact: High (3) / Medium (2) / Low (1) -- churn mentions and upgrade blockers = High
+- Effort (inverted): Low (3) / Medium (2) / High (1)
+- Priority Score = Users x Revenue x Effort, normalized to 10
 
-**Revenue impact indicators:**
-- Churn mentions → High revenue impact
-- Upgrade blockers → High revenue impact
-- Nice-to-haves with no urgency → Low revenue impact
+**Gate**: Every theme must have all three impact dimensions scored. Do not leave any as "unknown".
 
-### Step 6: Map to Existing Roadmap
+### Step 5: Roadmap Alignment (if user has existing roadmap)
 
-If the user has an existing roadmap or backlog:
+Map themes to existing roadmap items. Flag gaps (not planned), contradictions (deprioritized but users demand it), and alignments.
 
-| Feedback Theme | Existing Roadmap Item | Status | Gap |
-|----------------|----------------------|--------|-----|
-| [theme] | [feature/epic] | Planned Q2 | Aligned ✅ |
-| [theme] | [feature/epic] | In Progress | Already building ✅ |
-| [theme] | — | Not planned | NEW — needs evaluation ⚠️ |
-| [theme] | [feature/epic] | Deprioritized | Users disagree — re-evaluate 🔄 |
+### Step 6: Quick Wins
 
-Flag items where user demand contradicts roadmap priorities.
+Identify actions meeting all three criteria: < 1 week effort, affects > 10% of feedback volume, no dependencies. List each with action, impact, effort, and urgency reason.
 
-### Step 7: Quick Wins
+### Step 7: Executive Summary
 
-Identify high-impact, low-effort actions:
+Top 5 action items ranked Critical / Important / Nice-to-have with owner suggestions and timelines. One-paragraph key insight on product direction.
 
-```
-━━━ QUICK WINS (Do This Week) ━━━━━━━━━━━━
+### Step 8: Assemble Report
 
-1. [Action] — fixes [theme]
-   Impact: [X users affected]
-   Effort: [hours/days]
-   Why now: [urgency reason]
+Output sections: Executive Summary, Category Breakdown, Frequency Ranking, Impact Assessment, Roadmap Alignment (if applicable), Quick Wins, Raw Feedback Log.
 
-2. [Action] — fixes [theme]
-   Impact: [X users affected]
-   Effort: [hours/days]
-   Why now: [urgency reason]
+## Examples
 
-3. [Action] — fixes [theme]
-   Impact: [X users affected]
-   Effort: [hours/days]
-   Why now: [urgency reason]
-```
+**Example 1 -- App store reviews**:
+User pastes 47 iOS reviews. Output: 6 themes identified, top theme "slow load times" (34% of feedback, sentiment -0.7), 2 quick wins (cache optimization, loading skeleton), executive summary recommending performance sprint.
 
-Quick win criteria: < 1 week of effort, affects > 10% of feedback volume, no dependencies.
+**Example 2 -- Support tickets**:
+User provides 3 months of Zendesk export. Output: 89 tickets categorized, churn signal cluster around billing UX (12 tickets), feature request cluster around API access (18 tickets), roadmap gap flagged for API -- not currently planned.
 
-### Step 8: Executive Summary
+## Common Issues
 
-Write a concise summary for leadership:
+- **Too few feedback items for statistical significance**: If < 15 items, note that results are directional, not statistically reliable. Still categorize but caveat the frequency percentages.
+- **Mixed products in one dataset**: Ask the user to confirm product scope. If mixed, separate analysis per product or the themes become meaningless.
+- **Sentiment without context**: Raw sentiment scores mislead without category context. A -0.5 in Bug Reports is expected; a -0.5 in Praise signals data quality issues.
 
-```
-━━━ EXECUTIVE SUMMARY ━━━━━━━━━━━━━━━━━━━━
+## Anti-Patterns
 
-Feedback analyzed: [X] items from [sources] over [time period]
-Overall sentiment: [score] ([trend])
-
-TOP 5 ACTION ITEMS:
-
-1. 🔴 [Critical]: [action] — [X] users affected, [revenue impact]
-   Owner: [suggested team]
-   Timeline: [urgency]
-
-2. 🟡 [Important]: [action] — [X] users affected
-   Owner: [suggested team]
-   Timeline: [urgency]
-
-3. 🟡 [Important]: [action] — [X] users affected
-   Owner: [suggested team]
-   Timeline: [urgency]
-
-4. 🟢 [Nice-to-have]: [action] — [X] users requesting
-   Owner: [suggested team]
-   Timeline: [can wait]
-
-5. 🟢 [Nice-to-have]: [action] — [X] users requesting
-   Owner: [suggested team]
-   Timeline: [can wait]
-
-KEY INSIGHT:
-[One paragraph: the single most important thing this feedback tells you
-about your product direction, user satisfaction, or market position.]
-```
-
-### Step 9: Output
-
-Present the complete feedback analysis:
-
-```
-━━━ FEEDBACK ANALYSIS REPORT ━━━━━━━━━━━━━
-Product: [name]
-Period: [date range]
-Sources: [list]
-Total items: [count]
-
-── EXECUTIVE SUMMARY ──────────────────────
-[top 5 action items + key insight]
-
-── CATEGORY BREAKDOWN ─────────────────────
-[category table with counts and sentiment]
-
-── FREQUENCY RANKING ──────────────────────
-[ranked theme list]
-
-── IMPACT ASSESSMENT ──────────────────────
-[prioritized theme scores]
-
-── ROADMAP ALIGNMENT ──────────────────────
-[mapping to existing plans]
-
-── QUICK WINS ─────────────────────────────
-[immediate actions]
-
-── RAW FEEDBACK LOG ───────────────────────
-[categorized individual items]
-```
-
-## Inputs
-- Raw feedback data (pasted, file, or described themes)
-- Feedback source type
-- Product context
-- Time period
-- User segments (optional)
-- Existing roadmap or backlog (optional, for mapping)
-
-## Outputs
-- Categorized feedback (bug, feature request, UX, praise, confusion, churn)
-- Sentiment analysis per category and overall
-- Frequency ranking of themes
-- Impact assessment with priority scoring
-- Roadmap alignment mapping
-- Quick wins list (high impact, low effort)
-- Executive summary with top 5 action items and key insight
+- Treating all feedback items as equally weighted regardless of user segment or revenue
+- Reporting frequency without impact scoring (popular requests are not always important)
+- Skipping theme deduplication so related requests appear as separate low-priority items
+- Presenting raw data without an executive summary
+- Recommending actions without effort estimates
 
 ## Level History
 
-- **Lv.1** — Base: 6-category feedback taxonomy, sentiment scoring, frequency ranking with deduplication, impact assessment (users × revenue × effort), roadmap alignment mapping, quick wins identification, executive summary with prioritized action items. (Origin: MemStack v3.2, Mar 2026)
+- **Lv.1** -- Base: 6-category feedback taxonomy, sentiment scoring, frequency ranking with deduplication, impact assessment (users x revenue x effort), roadmap alignment mapping, quick wins identification, executive summary with prioritized action items. (Origin: MemStack v3.2, Mar 2026)
+- **Lv.2** -- Guide compliance: Added negative triggers, validation gates, Examples, Common Issues, Anti-Patterns. Compressed from 233 to <200 lines. (Origin: MemStack v3.3, Mar 2026)

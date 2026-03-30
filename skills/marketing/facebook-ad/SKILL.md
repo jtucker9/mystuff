@@ -1,27 +1,27 @@
 ---
 name: facebook-ad
-description: "Use when the user says 'facebook ad', 'FB ad', 'Meta ad', 'Instagram ad', 'social ad', or wants ad copy for Facebook/Instagram Ads Manager."
+description: "Use when the user says 'facebook ad', 'FB ad', 'Meta ad', 'Instagram ad', 'social ad', or wants ad copy for Facebook/Instagram Ads Manager. Do NOT use for Google search ads (see google-ad), organic social media posts, influencer outreach, or general social media strategy."
 ---
 
 
-# 📘 Facebook Ad — Meta Ads Copy & Strategy
+# Facebook Ad -- Meta Ads Copy and Strategy
 *Generate 3 ready-to-load ad variants with targeting, creative direction, and A/B test plan.*
 
 ## Activation
 
 When this skill activates, output:
 
-`📘 Facebook Ad — Generating Meta ad variants...`
+`Facebook Ad -- Generating Meta ad variants...`
 
 | Context | Status |
 |---------|--------|
 | **User says "facebook ad", "FB ad", "Meta ad", "Instagram ad"** | ACTIVE |
 | **User wants social media ad copy with targeting** | ACTIVE |
 | **User mentions Ads Manager or ad sets** | ACTIVE |
-| **User wants Google search ads** | DORMANT — see google-ad |
+| **User wants Google search ads** | DORMANT -- see google-ad |
 | **User wants organic social content (not paid)** | DORMANT |
 
-## Protocol
+## Instructions
 
 ### Step 1: Gather Inputs
 
@@ -32,104 +32,86 @@ Ask the user for:
 - **Campaign objective**: Traffic, leads, conversions, or awareness
 - **Landing page URL**: Where does the ad send people? (optional)
 
+**Gate**: Do not proceed without product description, target audience, and campaign objective. Budget can default to "flexible" if not provided.
+
 ### Step 2: Write 3 Ad Variants
 
-Generate three distinct ad approaches:
-
-#### Variant A — Storytelling
-Hook with a relatable story or scenario. Structure:
-- **Primary text** (above fold, first 125 chars matter most): Open with a story hook that stops the scroll. Continue with the narrative, connect to product, soft CTA.
-- **Headline** (40 chars max): Outcome-focused
+Generate three distinct ad approaches. For each variant, provide:
+- **Primary text** (above fold; first 125 chars are visible before "See more")
+- **Headline** (40 chars max)
 - **Description**: Supporting detail
-- **CTA button**: Learn More / Shop Now / Sign Up
+- **CTA button**: Learn More / Shop Now / Sign Up / Get Offer / See How / Get Started
 
-#### Variant B — Problem-Solution
-Lead with the pain point. Structure:
-- **Primary text**: State the problem bluntly (first 125 chars). Agitate. Present product as solution. Hard CTA.
-- **Headline** (40 chars max): Solution-focused
-- **Description**: Proof or urgency element
-- **CTA button**: Get Offer / Learn More
+**Variant A -- Storytelling**: Open with a relatable story hook that stops the scroll. Connect narrative to product, soft CTA.
 
-#### Variant C — Social Proof
-Lead with results or testimonials. Structure:
-- **Primary text**: Open with a specific result or quote (first 125 chars). Expand with context. Invite them to get similar results.
-- **Headline** (40 chars max): Results-focused
-- **Description**: Credibility marker
-- **CTA button**: See How / Get Started
+**Variant B -- Problem-Solution**: State the pain point bluntly in the first 125 chars. Agitate. Present product as solution. Hard CTA.
+
+**Variant C -- Social Proof**: Open with a specific result, metric, or customer quote. Expand with context. Invite similar results.
+
+**Gate**: Every headline must be under 40 characters. Every primary text must front-load the hook in the first 125 characters. Verify before proceeding.
 
 ### Step 3: Audience Targeting
 
 For each variant, recommend:
 - **Core targeting**: 3-5 interests, behaviors, or demographics
 - **Custom audiences**: Website visitors, email list, video viewers
-- **Lookalike audiences**: 1%, 3%, 5% lookalikes from best customers
-- **Exclusions**: Who to exclude (existing customers, competitors' employees)
-- **Placement recommendation**: Feed, Stories, Reels, or Automatic
+- **Lookalike audiences**: 1%, 3%, 5% from best customers
+- **Exclusions**: Existing customers, irrelevant segments
+- **Placement**: Feed, Stories, Reels, or Automatic
 
 ### Step 4: Creative Direction
 
 For each variant, describe the visual concept:
 - **Format**: Single image, carousel, or video
 - **Visual concept**: What the image/video shows, mood, colors
-- **Text overlay**: Any on-image text (keep under 20% of image area)
+- **Text overlay**: On-image text (keep under 20% of image area)
 - **Aspect ratios**: 1:1 for feed, 9:16 for Stories/Reels
 
-### Step 5: A/B Test Plan
+### Step 5: A/B Test Plan and Budget
 
-Recommend testing sequence:
-1. **Week 1**: Test creative (same copy, different images/videos) — find winning visual
-2. **Week 2**: Test copy (winning creative, different ad variants) — find winning message
-3. **Week 3**: Test audience (winning creative + copy, different targeting) — find best audience
-4. **Week 4**: Scale winning combination, test new angles
+**Testing sequence** (4 weeks):
+1. Week 1: Test creative (same copy, different visuals) -- find winning visual
+2. Week 2: Test copy (winning creative, different variants) -- find winning message
+3. Week 3: Test audience (winning creative + copy, different targeting) -- find best audience
+4. Week 4: Scale winning combination, test new angles
 
-### Step 6: Budget Allocation
+**Budget split**:
+- Testing phase (weeks 1-2): Equal split across variants, $5-10/day per ad set minimum
+- Scaling phase: 70% to winner, 30% to new tests
+- Retargeting reserve: 20% of total budget for warm audiences
 
-Recommend budget split:
-- **Testing phase** (first 2 weeks): Equal split across variants, $5-10/day per ad set minimum
-- **Scaling phase**: 70% to winning ad set, 30% to new tests
-- **Retargeting**: Reserve 20% of total budget for warm audiences
-- **Daily vs lifetime**: Recommend daily budget for testing, lifetime for campaigns with end dates
+**Gate**: If monthly budget is under $300, recommend testing only 2 variants instead of 3 and extending test phases.
 
-### Step 7: Output
+### Step 6: Output
 
-Present all 3 ad sets in a format ready to load into Ads Manager:
+Present all 3 ad sets in Ads Manager-ready format with primary text, headline, description, CTA button, audience targeting, creative direction, and placement for each. Include the test plan and budget allocation as a separate section.
 
-```
-━━━ AD SET A: STORYTELLING ━━━━━━━━━━━━━━━━━━
-Primary Text: [full text]
-Headline: [40 chars]
-Description: [text]
-CTA Button: [button type]
-Audience: [targeting details]
-Creative: [visual direction]
-Placement: [recommended placements]
+## Examples
 
-━━━ AD SET B: PROBLEM-SOLUTION ━━━━━━━━━━━━━━
-[same structure]
+**Example 1 -- E-commerce product launch**
+User: "Write FB ads for our new noise-canceling earbuds, $49. Target remote workers 25-45. $1500/mo budget, goal is conversions."
+Output: 3 variants (storytelling: "The meeting that changed everything...", problem-solution: "Still hearing your neighbor's dog during calls?", social proof: "4.8 stars from 2,000+ remote workers"). Each with targeting (interests: remote work, WFH, noise cancellation), carousel creative direction, 4-week test plan at $375/week.
 
-━━━ AD SET C: SOCIAL PROOF ━━━━━━━━━━━━━━━━━━
-[same structure]
+**Example 2 -- Local service business**
+User: "Meta ads for my Austin dog grooming mobile service. $500/mo, want leads."
+Output: 3 variants with geo-targeted audience (Austin metro, 25mi radius, pet owners), single-image creative direction featuring before/after shots, lead form CTA, adjusted 2-variant test plan for lower budget.
 
-━━━ TEST PLAN ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Week 1: [test details]
-Week 2: [test details]
-Budget: [allocation]
-```
+## Common Issues
 
-## Inputs
-- Product/service description
-- Target audience profile
-- Monthly budget
-- Campaign objective
-- Landing page URL (optional)
+- **Primary text too long above the fold**: The first 125 characters must contain the complete hook. Everything after "See more" has a steep drop-off in readership.
+- **Headline exceeds 40 characters**: Meta truncates long headlines on mobile. Always verify character count.
+- **Budget too low for 3-variant testing**: Below $300/mo, reduce to 2 variants and extend test windows to get statistically meaningful data.
 
-## Outputs
-- 3 complete ad variants (storytelling, problem-solution, social proof)
-- Audience targeting recommendations per variant
-- Creative direction briefs
-- 4-week A/B test plan
-- Budget allocation strategy
+## Anti-Patterns
+
+- Writing ad copy that reads like a product spec sheet instead of stopping the scroll
+- Using the same targeting for all three variants (defeats the purpose of testing)
+- Recommending Lookalike audiences when the user has no existing customer data to seed from
+- Ignoring placement differences (what works in Feed often fails in Stories)
+- Setting daily budgets below $5/ad set (insufficient for Meta's learning phase)
+- Suggesting organic content strategies (this skill is paid ads only)
 
 ## Level History
 
-- **Lv.1** — Base: 3-variant ad generation (storytelling, problem-solution, social proof), audience targeting with lookalikes, creative direction briefs, A/B test sequence, budget allocation strategy, Ads Manager-ready output format. (Origin: MemStack v3.2, Mar 2026)
+- **Lv.1** -- Base: 3-variant ad generation (storytelling, problem-solution, social proof), audience targeting with lookalikes, creative direction briefs, A/B test sequence, budget allocation strategy, Ads Manager-ready output format. (Origin: MemStack v3.2, Mar 2026)
+- **Lv.2** -- Guide alignment: Added negative triggers, validation gates between steps, examples, common issues, anti-patterns. Renamed Protocol to Instructions. Removed emoji from titles. Fleshed out budget gating logic. (Origin: MemStack v3.3, Mar 2026)
